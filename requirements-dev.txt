@@ -1,0 +1,9 @@
+# Minimal deps to run the fast unit tests (no datasets/kafka/bertopic needed —
+# those are lazy-imported and not exercised by the unit suite).
+torch>=2.2.0
+transformers>=4.47.0
+scikit-learn>=1.4.0
+numpy>=1.26.0
+redis>=5.0.0
+pytest>=8.0.0
+ruff>=0.4.0

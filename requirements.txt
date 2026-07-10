@@ -1,0 +1,45 @@
+# ── Core ML ───────────────────────────────────────────────────────────────────
+torch>=2.2.0
+transformers>=4.47.0
+datasets>=2.19.0
+evaluate>=0.4.0
+accelerate>=0.29.0
+peft>=0.10.0
+scikit-learn>=1.4.0
+numpy>=1.26.0
+scipy>=1.13.0
+
+# ── NLP specific ──────────────────────────────────────────────────────────────
+bertopic>=0.16.0
+umap-learn>=0.5.6
+hdbscan>=0.8.33
+sentence-transformers>=3.0.0
+
+# ── Streaming ─────────────────────────────────────────────────────────────────
+kafka-python>=2.0.2
+confluent-kafka>=2.3.0
+
+# ── Storage / caching ─────────────────────────────────────────────────────────
+redis>=5.0.0
+
+# ── Experiment tracking ───────────────────────────────────────────────────────
+mlflow>=2.12.0
+
+# ── API / serving ─────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+huggingface-hub>=0.23.0  # pull trained weights from the Hub at API startup
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+gradio>=4.36.0
+plotly>=5.20.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+rich>=13.7.0
+pandas>=2.2.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+tenacity>=8.3.0
