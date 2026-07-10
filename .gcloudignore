@@ -1,0 +1,17 @@
+# Keep the Cloud Build upload tiny — the image pulls models from the Hub itself.
+.git
+.github
+node_modules
+frontend
+app
+docker
+tests
+deploy
+mlruns
+results
+*.log
+**/__pycache__
+.pytest_cache
+.ruff_cache
+requirements-dev.txt
+*.md

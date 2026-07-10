@@ -1,0 +1,9 @@
+# Slim dependency set for the Cloud Run serving image — only what /analyze needs.
+# (Full requirements.txt adds Kafka/BERTopic/MLflow/Gradio for local experiments.)
+transformers>=4.47.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+huggingface-hub>=0.23.0
+numpy>=1.26.0
+python-dotenv>=1.0.0

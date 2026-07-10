@@ -1,37 +1,42 @@
-# Hugging Face Spaces (Docker SDK) entrypoint — serves the FastAPI model API.
+# Cloud Run serving image for the FastAPI model API.
 #
-# HF Spaces auto-detects a root-level Dockerfile, builds it, and routes public
-# traffic to port 7860. This is the free-tier backend the Vercel frontend calls.
-# For local multi-service dev (Kafka + Redis + UI), use docker/docker-compose.yml.
+# All model artifacts are baked in at BUILD time (pulled from the HF Hub over
+# GCP's fast network), so cold starts do ZERO network I/O — the container only
+# loads weights from local disk. Listens on Cloud Run's $PORT.
 #
-# Trained weights are pulled at runtime from the HF Hub — set the HF_MODEL_REPO
-# variable in the Space settings (see deploy/hf-space/SETUP.md). No .pt in git.
+# Deploy:  gcloud run deploy nlp-pipeline-api --source . --region us-central1 \
+#            --memory 4Gi --cpu 2 --allow-unauthenticated --timeout 600
+#
+# (HF Docker Spaces now require a paid PRO plan, so this replaced the Space plan.)
 
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential git \
-    && rm -rf /var/lib/apt/lists/*
-
-# HF Spaces run the container as a non-root user (uid 1000). Create it and make
-# HOME writable so model/dataset caches don't hit permission errors.
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH \
-    PYTHONPATH=/home/user/app \
-    HF_HOME=/home/user/.cache/huggingface \
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    HF_HOME=/app/hf_cache \
+    HF_HUB_DISABLE_TELEMETRY=1 \
     USE_TF=0 \
     USE_FLAX=0 \
-    TRANSFORMERS_NO_ADVISORY_WARNINGS=1
+    TRANSFORMERS_NO_ADVISORY_WARNINGS=1 \
+    MODEL_CKPT_PATH=/app/model/best_model.pt
 
-WORKDIR /home/user/app
+WORKDIR /app
 
-COPY --chown=user requirements.txt .
+# CPU-only torch (much smaller than the CUDA build) + slim serving deps.
+COPY requirements-api.txt .
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+ && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -r requirements-api.txt
 
-COPY --chown=user . .
+# Pre-bake every model artifact so runtime does no downloads:
+#  - trained multi-task weights, - roberta-base backbone + tokenizer, - NER model.
+RUN python -c "from huggingface_hub import hf_hub_download; hf_hub_download('shiva-1993/nlp-pipeline-multitask', 'best_model.pt', local_dir='/app/model')" \
+ && python -c "from transformers import AutoTokenizer, AutoModel; AutoTokenizer.from_pretrained('roberta-base'); AutoModel.from_pretrained('roberta-base')" \
+ && python -c "from transformers import pipeline; pipeline('ner', model='dslim/bert-base-NER', aggregation_strategy='simple')"
 
-EXPOSE 7860
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]
+COPY api ./api
+COPY src ./src
+COPY configs ./configs
+
+EXPOSE 8080
+CMD exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}

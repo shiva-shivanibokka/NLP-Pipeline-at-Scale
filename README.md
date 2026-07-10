@@ -1,5 +1,9 @@
 # NLP Pipeline at Scale — Real-Time Social Listening
 
+**▶️ Live demo:** [frontend-shiv-a.vercel.app](https://frontend-shiv-a.vercel.app) — type any text, get real-time multi-task predictions.
+Frontend on **Vercel** (Next.js) → model API on **Google Cloud Run** (FastAPI + trained RoBERTa), all on free tiers.
+*(Scale-to-zero backend: the first request after idle takes ~15–20s to warm up.)*
+
 A production-grade NLP pipeline for real-time social media analysis. Processes a simulated tweet stream via **Kafka**, runs **multi-task RoBERTa** inference (joint sentiment + emotion + toxicity in a single forward pass), extracts named entities with brand normalization, assigns topics via **online incremental BERTopic**, and surfaces **brand sentiment anomalies** via Statistical Process Control.
 
 Three empirical studies with measured results:

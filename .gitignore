@@ -17,3 +17,7 @@ frontend/.next/
 frontend/out/
 frontend/.vercel/
 .DS_Store
+
+# Vercel CLI
+frontend/.vercel/
+frontend/.env*.local
