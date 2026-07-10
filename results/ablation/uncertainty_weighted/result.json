@@ -1,0 +1,29 @@
+{
+  "strategy": "uncertainty_weighted",
+  "description": "One backbone, three heads, loss weights learned via Kendall et al. 2018",
+  "metrics": {
+    "sentiment": {
+      "accuracy": 0.6989579941387171,
+      "f1_macro": 0.6997364989741067
+    },
+    "emotion": {
+      "accuracy": 0.929,
+      "f1_macro": 0.8882534237503323
+    },
+    "toxicity": {
+      "accuracy": 0.5195286195286195,
+      "f1_macro": 0.4731724671241665
+    }
+  },
+  "latency_ms": {
+    "mean_ms": 9.026011999812908,
+    "p99_ms": 12.369835994031748
+  },
+  "param_info": {
+    "total_params": 124945166,
+    "trainable_params": 124945166,
+    "total_M": 124.95
+  },
+  "training_duration_s": 2435.8,
+  "run_id": "4937bd3ee9e145e6968bc106461b1914"
+}

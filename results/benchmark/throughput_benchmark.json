@@ -1,0 +1,73 @@
+{
+  "saturation_point_msgs_per_sec": 1500,
+  "batch_size": 32,
+  "max_wait_ms": 100,
+  "results": [
+    {
+      "target_msgs_per_sec": 100,
+      "actual_producer_msgs_per_sec": 99.9,
+      "actual_consumer_msgs_per_sec": 99.9,
+      "consumer_lag_end": 0,
+      "latency_p50_ms": 0.83,
+      "latency_p95_ms": 0.96,
+      "latency_p99_ms": 1.01,
+      "throughput_ratio": 1.0,
+      "saturated": false
+    },
+    {
+      "target_msgs_per_sec": 250,
+      "actual_producer_msgs_per_sec": 250.0,
+      "actual_consumer_msgs_per_sec": 249.9,
+      "consumer_lag_end": 7,
+      "latency_p50_ms": 0.79,
+      "latency_p95_ms": 0.93,
+      "latency_p99_ms": 0.98,
+      "throughput_ratio": 1.0,
+      "saturated": false
+    },
+    {
+      "target_msgs_per_sec": 500,
+      "actual_producer_msgs_per_sec": 499.0,
+      "actual_consumer_msgs_per_sec": 499.0,
+      "consumer_lag_end": 0,
+      "latency_p50_ms": 0.79,
+      "latency_p95_ms": 0.92,
+      "latency_p99_ms": 0.97,
+      "throughput_ratio": 1.0,
+      "saturated": false
+    },
+    {
+      "target_msgs_per_sec": 1000,
+      "actual_producer_msgs_per_sec": 999.8,
+      "actual_consumer_msgs_per_sec": 999.8,
+      "consumer_lag_end": 1,
+      "latency_p50_ms": 0.79,
+      "latency_p95_ms": 0.93,
+      "latency_p99_ms": 0.98,
+      "throughput_ratio": 1.0,
+      "saturated": false
+    },
+    {
+      "target_msgs_per_sec": 1500,
+      "actual_producer_msgs_per_sec": 1500.0,
+      "actual_consumer_msgs_per_sec": 1250.1,
+      "consumer_lag_end": 14993,
+      "latency_p50_ms": 0.8,
+      "latency_p95_ms": 0.92,
+      "latency_p99_ms": 0.97,
+      "throughput_ratio": 0.833,
+      "saturated": true
+    },
+    {
+      "target_msgs_per_sec": 2000,
+      "actual_producer_msgs_per_sec": 1999.5,
+      "actual_consumer_msgs_per_sec": 1251.4,
+      "consumer_lag_end": 44897,
+      "latency_p50_ms": 0.8,
+      "latency_p95_ms": 0.93,
+      "latency_p99_ms": 0.98,
+      "throughput_ratio": 0.626,
+      "saturated": true
+    }
+  ]
+}

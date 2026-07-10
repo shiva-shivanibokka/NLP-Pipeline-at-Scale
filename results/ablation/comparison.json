@@ -1,0 +1,89 @@
+[
+  {
+    "strategy": "independent",
+    "description": "Three separate single-task models (baseline)",
+    "metrics": {
+      "sentiment": {
+        "f1_macro": 0.709003920834455,
+        "accuracy": 0.7088082057961576
+      },
+      "emotion": {
+        "f1_macro": 0.8790950722780564,
+        "accuracy": 0.926
+      },
+      "toxicity": {
+        "f1_macro": 0.4909309215897456,
+        "accuracy": 0.530976430976431
+      }
+    },
+    "latency_ms": {
+      "mean_ms": 24.834115998528432,
+      "p99_ms": 27.00696099578636
+    },
+    "param_info": {
+      "total_params": 373055243,
+      "trainable_params": 373055243,
+      "total_M": 373.06
+    },
+    "training_duration_s": 2350.8,
+    "run_id": "6b79d0dda06045a2acbec633704236ac"
+  },
+  {
+    "strategy": "hard_sharing",
+    "description": "One backbone, three heads, fixed equal loss weights (1/3 each)",
+    "metrics": {
+      "sentiment": {
+        "accuracy": 0.6988765874308043,
+        "f1_macro": 0.699796234929951
+      },
+      "emotion": {
+        "accuracy": 0.9285,
+        "f1_macro": 0.8839399073868787
+      },
+      "toxicity": {
+        "accuracy": 0.5242424242424243,
+        "f1_macro": 0.4781121898181754
+      }
+    },
+    "latency_ms": {
+      "mean_ms": 8.85654100246029,
+      "p99_ms": 12.5721600218094
+    },
+    "param_info": {
+      "total_params": 124945163,
+      "trainable_params": 124945163,
+      "total_M": 124.95
+    },
+    "training_duration_s": 3206.0,
+    "run_id": "d58b475e84dc4dd39def6acdc18fff00"
+  },
+  {
+    "strategy": "uncertainty_weighted",
+    "description": "One backbone, three heads, loss weights learned via Kendall et al. 2018",
+    "metrics": {
+      "sentiment": {
+        "accuracy": 0.6989579941387171,
+        "f1_macro": 0.6997364989741067
+      },
+      "emotion": {
+        "accuracy": 0.929,
+        "f1_macro": 0.8882534237503323
+      },
+      "toxicity": {
+        "accuracy": 0.5195286195286195,
+        "f1_macro": 0.4731724671241665
+      }
+    },
+    "latency_ms": {
+      "mean_ms": 9.026011999812908,
+      "p99_ms": 12.369835994031748
+    },
+    "param_info": {
+      "total_params": 124945166,
+      "trainable_params": 124945166,
+      "total_M": 124.95
+    },
+    "training_duration_s": 2435.8,
+    "run_id": "4937bd3ee9e145e6968bc106461b1914"
+  }
+]

@@ -97,7 +97,7 @@ def compute_entropy_scores(
 
     Args:
         model:             Trained single-task model.
-        unlabeled_dataset: Dataset returning {input_ids, attention_mask, true_label}
+        unlabeled_dataset: Dataset returning {input_ids, attention_mask, labels}
         device:            Inference device.
         batch_size:        Inference batch size.
 

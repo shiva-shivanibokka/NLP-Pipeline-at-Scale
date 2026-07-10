@@ -233,7 +233,10 @@ def load_unlabeled_pool(
     ds = ds.shuffle(seed=seed).select(range(min(pool_size, len(ds))))
 
     texts = list(ds["text"])  # materialise datasets>=5.0 lazy Column
-    true_labels = list(ds["label"])  # kept for evaluation, not shown to the model
+    # Ground-truth labels: hidden from acquisition (entropy uses only the inputs),
+    # but revealed as the training target once an example is queried. Exposed under
+    # the standard "labels" key so the trainer can consume the queried subset.
+    labels = list(ds["label"])
     toks = _tokenise(texts, tokenizer, max_length)
 
     class _UnlabeledDS(Dataset):
@@ -243,7 +246,7 @@ def load_unlabeled_pool(
                 "attention_mask": torch.tensor(
                     toks[idx]["attention_mask"], dtype=torch.long
                 ),
-                "true_label": torch.tensor(int(true_labels[idx]), dtype=torch.long),
+                "labels": torch.tensor(int(labels[idx]), dtype=torch.long),
             }
 
         def __len__(self):

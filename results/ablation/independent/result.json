@@ -1,0 +1,29 @@
+{
+  "strategy": "independent",
+  "description": "Three separate single-task models (baseline)",
+  "metrics": {
+    "sentiment": {
+      "f1_macro": 0.709003920834455,
+      "accuracy": 0.7088082057961576
+    },
+    "emotion": {
+      "f1_macro": 0.8790950722780564,
+      "accuracy": 0.926
+    },
+    "toxicity": {
+      "f1_macro": 0.4909309215897456,
+      "accuracy": 0.530976430976431
+    }
+  },
+  "latency_ms": {
+    "mean_ms": 24.834115998528432,
+    "p99_ms": 27.00696099578636
+  },
+  "param_info": {
+    "total_params": 373055243,
+    "trainable_params": 373055243,
+    "total_M": 373.06
+  },
+  "training_duration_s": 2350.8,
+  "run_id": "6b79d0dda06045a2acbec633704236ac"
+}
