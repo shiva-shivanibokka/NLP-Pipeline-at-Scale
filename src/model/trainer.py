@@ -36,6 +36,24 @@ from src.model.dataset import (
 )
 
 
+def _build_optimizer(model, cfg: TrainingConfig) -> AdamW:
+    """AdamW with weight decay — but NOT on the learnable log-sigma uncertainty
+    parameters. Decaying log_sigma pulls sigma toward 1 (equal task weighting),
+    biasing the uncertainty_weighted strategy back toward hard_sharing and
+    partially defeating the very thing the ablation measures.
+    """
+    decay, no_decay = [], []
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        (no_decay if "log_sigma" in name else decay).append(p)
+    groups = [
+        {"params": decay, "weight_decay": cfg.weight_decay},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
+    return AdamW(groups, lr=cfg.lr)
+
+
 # ── Multi-task training step ───────────────────────────────────────────────────
 
 
@@ -155,24 +173,50 @@ def _multitask_eval(model, loader: DataLoader, device: str) -> dict:
 # ── Single-task training (independent baseline) ────────────────────────────────
 
 
+@torch.no_grad()
+def _eval_single(model, loader: DataLoader, device: str) -> tuple[float, float]:
+    """Evaluate a single-task model. Returns (f1_macro, accuracy)."""
+    model.eval()
+    preds, trues = [], []
+    for batch in loader:
+        out = model(
+            input_ids=batch["input_ids"].to(device),
+            attention_mask=batch["attention_mask"].to(device),
+        )
+        preds.extend(out.logits.argmax(-1).cpu().numpy())
+        trues.extend(batch["labels"].numpy())
+    f1 = float(f1_score(trues, preds, average="macro", zero_division=0))
+    acc = float(accuracy_score(trues, preds))
+    return f1, acc
+
+
 def _train_single_task(
     task: str,
     model,
     cfg: TrainingConfig,
     device: str,
 ) -> dict:
-    """Train one single-task model for the 'independent' ablation."""
+    """Train one single-task model for the 'independent' ablation.
+
+    Selects the best checkpoint on the validation split, then reports metrics on
+    the held-out TEST split — identical protocol to the multi-task strategies, so
+    the ablation table compares like with like.
+    """
     train_ds = load_single_task_dataset(task, "train", limit=cfg.max_examples_per_task)
     val_ds = load_single_task_dataset(task, "validation", limit=cfg.max_examples_per_task)
+    test_ds = load_single_task_dataset(task, "test", limit=cfg.max_examples_per_task)
     train_loader = DataLoader(
         train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=0
     )
     val_loader = DataLoader(
         val_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=0
     )
+    test_loader = DataLoader(
+        test_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=0
+    )
 
     model = model.to(device)
-    optimizer = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    optimizer = _build_optimizer(model, cfg)
     total_steps = len(train_loader) * cfg.num_epochs
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
@@ -181,10 +225,10 @@ def _train_single_task(
     )
     scaler = torch.amp.GradScaler("cuda") if cfg.fp16 and "cuda" in device else None
 
-    best_f1 = 0.0
+    best_val_f1 = 0.0
+    best_state = None
     for epoch in range(cfg.num_epochs):
         model.train()
-        total_loss = 0.0
         for batch in train_loader:
             optimizer.zero_grad()
             input_ids = batch["input_ids"].to(device)
@@ -210,26 +254,29 @@ def _train_single_task(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
             scheduler.step()
-            total_loss += loss.item()
 
-        # Validation
-        model.eval()
-        val_preds, val_true = [], []
-        with torch.no_grad():
-            for batch in val_loader:
-                out = model(
-                    input_ids=batch["input_ids"].to(device),
-                    attention_mask=batch["attention_mask"].to(device),
-                )
-                val_preds.extend(out.logits.argmax(-1).cpu().numpy())
-                val_true.extend(batch["labels"].numpy())
-        f1 = f1_score(val_true, val_preds, average="macro", zero_division=0)
-        acc = accuracy_score(val_true, val_preds)
-        mlflow.log_metrics({f"val_{task}_f1": f1, f"val_{task}_acc": acc}, step=epoch)
-        if f1 > best_f1:
-            best_f1 = f1
+        val_f1, val_acc = _eval_single(model, val_loader, device)
+        mlflow.log_metrics({f"val_{task}_f1": val_f1, f"val_{task}_acc": val_acc}, step=epoch)
+        print(
+            f"[independent:{task}] epoch {epoch + 1}/{cfg.num_epochs} "
+            f"val_f1={val_f1:.4f} val_acc={val_acc:.4f}",
+            flush=True,
+        )
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
-    return {"f1_macro": best_f1, "model": model}
+    # Restore best-on-val checkpoint and report TEST metrics.
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    test_f1, test_acc = _eval_single(model, test_loader, device)
+    mlflow.log_metrics({f"test_{task}_f1": test_f1, f"test_{task}_acc": test_acc})
+    print(
+        f"[independent:{task}] TEST f1={test_f1:.4f} acc={test_acc:.4f} "
+        f"(best val f1={best_val_f1:.4f})",
+        flush=True,
+    )
+    return {"f1_macro": test_f1, "accuracy": test_acc, "model": model}
 
 
 # ── Main training function ─────────────────────────────────────────────────────
@@ -279,7 +326,10 @@ def train_strategy(cfg: TrainingConfig) -> dict:
             final_metrics = {}
             for task, m in model.items():
                 result = _train_single_task(task, m, cfg, device)
-                final_metrics[task] = {"f1_macro": result["f1_macro"]}
+                final_metrics[task] = {
+                    "f1_macro": result["f1_macro"],
+                    "accuracy": result["accuracy"],
+                }
 
             # Measure inference latency (sum of three forward passes)
             latency_ms = _measure_independent_latency(model, device)
@@ -301,9 +351,7 @@ def train_strategy(cfg: TrainingConfig) -> dict:
             )
 
             model = model.to(device)
-            optimizer = AdamW(
-                model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
-            )
+            optimizer = _build_optimizer(model, cfg)
             total_steps = len(train_loader) * cfg.num_epochs
             scheduler = get_linear_schedule_with_warmup(
                 optimizer,
@@ -352,6 +400,16 @@ def train_strategy(cfg: TrainingConfig) -> dict:
                         },
                     },
                     step=epoch,
+                )
+
+                print(
+                    f"[{cfg.strategy}] epoch {epoch + 1}/{cfg.num_epochs} "
+                    f"train_loss={train_metrics['train_loss']:.4f} "
+                    f"val_avg_f1={avg_f1:.4f} "
+                    f"(sent={val_metrics['sentiment']['f1_macro']:.3f} "
+                    f"emo={val_metrics['emotion']['f1_macro']:.3f} "
+                    f"tox={val_metrics['toxicity']['f1_macro']:.3f})",
+                    flush=True,
                 )
 
                 if avg_f1 > best_val_f1:

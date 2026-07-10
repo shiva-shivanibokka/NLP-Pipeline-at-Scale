@@ -49,7 +49,15 @@ class SingleTaskRoBERTa(RobertaPreTrainedModel):
         self.num_labels = num_labels
         self.roberta = RobertaModel(config, add_pooling_layer=False)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(config.hidden_size, num_labels)
+        # Identical 2-layer MLP head to each MultiTaskRoBERTa task head, so the
+        # ablation isolates backbone SHARING and loss weighting — not head capacity.
+        hidden_size = config.hidden_size
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 2, num_labels),
+        )
         self.post_init()
 
     @classmethod
