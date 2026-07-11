@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Server-side proxy to the model API (a free Hugging Face Space). Keeps the
-// backend URL server-only (no CORS, not exposed to the browser). Set
-// MODEL_API_URL in the Vercel project's environment variables.
+// Server-side proxy to the model API (FastAPI on Cloud Run). Keeps the backend URL
+// server-only (no CORS, not exposed to the browser). Set MODEL_API_URL in the Vercel
+// project's environment variables.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Allow the function to wait out a Cloud Run cold start (scale-to-zero loads ~1.5GB of
+// models on the first request). 60s is the Vercel Hobby ceiling; raise on Pro if needed.
+export const maxDuration = 60;
 
 const API = process.env.MODEL_API_URL;
 
@@ -35,16 +38,23 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(`${API.replace(/\/$/, "")}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Topics need the streaming pipeline populated, which isn't on the Space.
       body: JSON.stringify({ text, include_entities: true, include_topics: false }),
-      signal: AbortSignal.timeout(30_000),
+      // A bit under maxDuration so we can return a friendly message instead of a
+      // hard function timeout.
+      signal: AbortSignal.timeout(57_000),
     });
     const data = await upstream.json().catch(() => ({ error: "Bad upstream response" }));
     return NextResponse.json(data, { status: upstream.status });
   } catch (e) {
+    const timedOut =
+      e instanceof Error && (e.name === "TimeoutError" || /timeout|abort/i.test(e.message));
     return NextResponse.json(
-      { error: `Model API unreachable: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 502 },
+      {
+        error: timedOut
+          ? "The model was asleep and is waking up (free scale-to-zero backend). Give it ~20s and click Analyze again — it stays fast once warm."
+          : `Model API unreachable: ${e instanceof Error ? e.message : String(e)}`,
+      },
+      { status: timedOut ? 503 : 502 },
     );
   }
 }

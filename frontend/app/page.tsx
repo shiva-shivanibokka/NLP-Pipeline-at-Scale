@@ -152,6 +152,11 @@ export default function Home() {
             <span className="kbd">⌘↵</span>
           </button>
         </div>
+        <p className="cold-note">
+          {loading
+            ? "Waking the model if it was idle — the first request can take ~20s."
+            : "Free scale-to-zero backend: the first request after idle wakes the model (~20s), then it's fast."}
+        </p>
       </section>
 
       {err && <div className="err">⚠ {err}</div>}

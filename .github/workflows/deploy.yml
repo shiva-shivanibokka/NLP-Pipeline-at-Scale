@@ -1,0 +1,44 @@
+name: Deploy API to Cloud Run
+
+# Continuous deployment for the backend. The frontend is deployed by Vercel's own
+# git integration, so this workflow only fires when API/model/serving files change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "src/**"
+      - "configs/**"
+      - "Dockerfile"
+      - "requirements-api.txt"
+      - ".gcloudignore"
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skip on forks / when the deploy secret isn't configured.
+    if: ${{ github.repository_owner == 'shiva-shivanibokka' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy nlp-pipeline-api \
+            --source . \
+            --project "${{ secrets.GCP_PROJECT }}" \
+            --region us-central1 \
+            --memory 4Gi --cpu 2 \
+            --allow-unauthenticated \
+            --timeout 600 --port 8080 \
+            --cpu-boost \
+            --quiet

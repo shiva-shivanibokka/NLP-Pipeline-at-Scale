@@ -8,8 +8,10 @@
 **▶️ Live demo:** **[nlp-pipeline-at-scale-shiv-a.vercel.app](https://nlp-pipeline-at-scale-shiv-a.vercel.app)** — type any text, watch it decode in real time.
 
 ![CI](https://github.com/shiva-shivanibokka/NLP-Pipeline-at-Scale/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/shiva-shivanibokka/NLP-Pipeline-at-Scale/actions/workflows/deploy.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c)
+![License](https://img.shields.io/badge/license-MIT-green)
 ![Deployed](https://img.shields.io/badge/deployed-Vercel%20%2B%20Cloud%20Run-brightgreen)
 
 A real-time social-listening pipeline that ingests a tweet stream via **Kafka**, runs **multi-task RoBERTa** inference (joint sentiment + emotion + toxicity in one forward pass), extracts named entities with brand normalization, assigns topics via **online incremental BERTopic**, and surfaces **brand-sentiment anomalies** with Statistical Process Control. Trained on real data (`cardiffnlp/tweet_eval`, `dair-ai/emotion`) — no synthetic datasets.
@@ -245,6 +247,8 @@ Coverage is focused, not exhaustive — the tests pin the parts most likely to b
 - **Weights** → pushed to the **HF Hub**, downloaded at build (never committed to git).
 - **Streaming + benchmark** → run **locally** via `docker-compose`; results are committed as reproducible evidence rather than hosted as a live cost.
 
+**CI/CD:** GitHub Actions runs lint + tests on every push (`ci.yml`); a second workflow (`deploy.yml`) auto-deploys the API to Cloud Run when backend files change (see `deploy/cloud-run/CD-SETUP.md` for the one-time GCP secret setup). The frontend auto-deploys via Vercel's git integration.
+
 See `deploy/hf-space/SETUP.md` for the (now legacy) HF Space notes — HF Docker Spaces became paid-only, which is why the backend moved to Cloud Run.
 
 ---
@@ -261,7 +265,7 @@ See `deploy/hf-space/SETUP.md` for the (now legacy) HF Space notes — HF Docker
 
 ## License
 
-No license file is currently included — the code is shared for portfolio/review purposes. Contact the author before reuse.
+[MIT](LICENSE) © 2026 Shivani Bokka.
 
 ---
 
