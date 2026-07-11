@@ -37,6 +37,26 @@ function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+function Tip({ text }: { text: string }) {
+  return (
+    <span className="tip" tabIndex={0} role="note" aria-label={text}>
+      <span className="q" aria-hidden="true">?</span>
+      <span className="pop">{text}</span>
+    </span>
+  );
+}
+
+const TIPS = {
+  sentiment:
+    "3-class sentiment (negative / neutral / positive) from one head of the shared RoBERTa backbone. The marker sits at P(positive) − P(negative); the percentage is the winning class's probability.",
+  emotion:
+    "6-class emotion from a second head on the same backbone (trained on dair-ai/emotion). Every class probability is shown, sorted high→low — the model always splits its confidence across all six.",
+  toxicity:
+    "Binary toxicity from a third head (a hate-speech proxy, trained on tweet_eval/hate). The gauge shows the model's P(toxic).",
+  entities:
+    "Named entities from a separate cased BERT-NER model. It relies on capitalization — write 'McDonald's', not 'mc donalds'. Recognised companies are mapped to a canonical brand id.",
+} as const;
+
 export default function Home() {
   const [text, setText] = useState("");
   const [res, setRes] = useState<Result | null>(null);
@@ -93,6 +113,22 @@ export default function Home() {
         </span>
       </header>
 
+      <div className="explainer">
+        <span className="lead">How this works</span>
+        <div className="body">
+          Type any short message and one <b>RoBERTa</b> forward pass reads it three ways at once —
+          a single shared backbone with three heads predicts <b>sentiment</b>, all six{" "}
+          <b>emotions</b>, and <b>toxicity</b> simultaneously. A separate <b>NER</b> model then
+          pulls out named entities and normalises known companies to a canonical brand id. Every
+          panel below has a <b>?</b> that explains what it shows.
+          <div className="flow">
+            <span>your text</span> <i>→</i> <span>tokenize</span> <i>→</i>{" "}
+            <span>RoBERTa · 3 heads</span> <i>→</i> <span>NER + brands</span> <i>→</i>{" "}
+            <span>results</span>
+          </div>
+        </div>
+      </div>
+
       <section className="console">
         <textarea
           value={text}
@@ -126,7 +162,10 @@ export default function Home() {
           {/* Signature: sentiment spectrum */}
           <section className="card reveal">
             <div className="card-h">
-              <span className="t">Sentiment spectrum</span>
+              <span className="t">
+                Sentiment spectrum
+                <Tip text={TIPS.sentiment} />
+              </span>
               <span className="v">3-class</span>
             </div>
             <div className="spectrum-read">
@@ -159,7 +198,10 @@ export default function Home() {
             {/* All six emotions */}
             <section className="card reveal">
               <div className="card-h">
-                <span className="t">Emotion</span>
+                <span className="t">
+                  Emotion
+                  <Tip text={TIPS.emotion} />
+                </span>
                 <span className="v">6-class</span>
               </div>
               <div className="bars">
@@ -182,7 +224,10 @@ export default function Home() {
             <div style={{ display: "grid", gap: 16 }}>
               <section className="card reveal">
                 <div className="card-h">
-                  <span className="t">Toxicity</span>
+                  <span className="t">
+                    Toxicity
+                    <Tip text={TIPS.toxicity} />
+                  </span>
                   <span className="v">binary</span>
                 </div>
                 <div className="gauge">
@@ -201,11 +246,17 @@ export default function Home() {
 
               <section className="card reveal">
                 <div className="card-h">
-                  <span className="t">Entities</span>
+                  <span className="t">
+                    Entities
+                    <Tip text={TIPS.entities} />
+                  </span>
                   <span className="v">NER + brands</span>
                 </div>
                 {res.entities.length === 0 ? (
-                  <span className="empty">No named entities detected.</span>
+                  <span className="empty">
+                    No entities found. The NER model is case-sensitive — try proper
+                    capitalization (e.g. “Tesla”, “McDonald&apos;s”), not “tesla” or “mc donalds”.
+                  </span>
                 ) : (
                   <div className="ents">
                     {res.entities.map((e, i) => (
