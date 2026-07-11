@@ -2,21 +2,15 @@
 
 import { useState } from "react";
 
-type Entity = {
-  text: string;
-  entity_type: string;
-  score: number;
-  canonical_id: string | null;
-};
-
-type AnalyzeResult = {
+type Entity = { text: string; entity_type: string; score: number; canonical_id: string | null };
+type Result = {
   text: string;
   sentiment: string;
-  sentiment_score: number;
+  sentiment_probs: Record<string, number>;
   emotion: string;
-  emotion_score: number;
+  emotion_probs: Record<string, number>;
   toxicity: string;
-  toxicity_score: number;
+  toxicity_probs: Record<string, number>;
   uncertainty: number;
   entities: Entity[];
   inference_latency_ms: number;
@@ -26,146 +20,224 @@ type AnalyzeResult = {
 const SAMPLES = [
   "Just tried the new Apple Vision Pro and honestly it blew me away 🤯",
   "Tesla's customer service has been an absolute nightmare this week.",
-  "Not sure how I feel about the Google layoffs, mixed emotions tbh.",
+  "Not sure how I feel about the Google layoffs — mixed emotions tbh.",
 ];
 
-const toneClass = (label: string) => {
-  const l = label.toLowerCase();
-  if (["positive", "joy", "love", "not_toxic"].includes(l)) return "good";
-  if (["negative", "anger", "fear", "sadness", "toxic"].includes(l)) return "bad";
-  return "neutral";
+// each emotion gets its associative hue (see globals.css)
+const EMO_COLOR: Record<string, string> = {
+  joy: "var(--joy)",
+  love: "var(--love)",
+  surprise: "var(--surprise)",
+  sadness: "var(--sadness)",
+  fear: "var(--fear)",
+  anger: "var(--anger)",
 };
 
-function ScoreCard({
-  title,
-  label,
-  score,
-}: {
-  title: string;
-  label: string;
-  score: number;
-}) {
-  const tone = toneClass(label);
-  return (
-    <div className="card">
-      <div className="card-title">{title}</div>
-      <div className={`card-label ${tone}`}>{label.replace("_", " ")}</div>
-      <div className="bar">
-        <div className={`bar-fill ${tone}`} style={{ width: `${Math.round(score * 100)}%` }} />
-      </div>
-      <div className="card-score">{(score * 100).toFixed(1)}% confidence</div>
-    </div>
-  );
+function pct(n: number) {
+  return `${(n * 100).toFixed(1)}%`;
 }
 
 export default function Home() {
   const [text, setText] = useState("");
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [res, setRes] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   async function analyze(input?: string) {
     const t = (input ?? text).trim();
     if (!t) return;
     setText(t);
     setLoading(true);
-    setError(null);
-    setResult(null);
+    setErr(null);
+    setRes(null);
     try {
       const r = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: t }),
       });
-      const data = (await r.json()) as AnalyzeResult;
+      const data = (await r.json()) as Result;
       if (!r.ok || data.error) throw new Error(data.error || `Request failed (${r.status})`);
-      setResult(data);
+      setRes(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }
 
+  // sentiment marker: signed score in [-1, 1] → [0%, 100%]
+  const sScore = res ? (res.sentiment_probs.positive ?? 0) - (res.sentiment_probs.negative ?? 0) : 0;
+  const markerLeft = ((sScore + 1) / 2) * 100;
+  const emotions = res
+    ? Object.entries(res.emotion_probs).sort((a, b) => b[1] - a[1])
+    : [];
+  const toxP = res?.toxicity_probs.toxic ?? 0;
+  const toxic = res?.toxicity === "toxic";
+
   return (
     <main className="wrap">
-      <header className="head">
-        <div className="kicker">multi-task nlp · single forward pass</div>
-        <h1>Real-Time Text Analyzer</h1>
-        <p className="sub">
-          One shared RoBERTa backbone predicts <strong>sentiment</strong>,{" "}
-          <strong>emotion</strong>, and <strong>toxicity</strong> together, then extracts
-          named entities and normalizes them to canonical brands.
+      <header>
+        <span className="eyebrow">Multi-task NLP · Social listening</span>
+        <h1>
+          Read the <span className="em">signal</span> in
+          <br /> every sentence.
+        </h1>
+        <p className="lede">
+          One shared RoBERTa pass scores <b>sentiment</b>, all six <b>emotions</b>, and{" "}
+          <b>toxicity</b> at once — then pulls out the <b>brands</b> being talked about. Type
+          anything and watch it decode.
         </p>
+        <span className="live">
+          <span className="dot" /> live · served from Google Cloud Run
+        </span>
       </header>
 
-      <section className="panel">
+      <section className="console">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") analyze();
           }}
-          placeholder="Type or paste a tweet-length message…"
-          rows={4}
+          placeholder="e.g. Amazon's delivery was late again and I'm so done with it…"
+          rows={3}
           maxLength={2000}
         />
-        <div className="controls">
+        <div className="row">
           <div className="samples">
             {SAMPLES.map((s, i) => (
-              <button key={i} className="chip" onClick={() => analyze(s)} disabled={loading}>
+              <button key={i} className="chip" disabled={loading} onClick={() => analyze(s)}>
                 sample {i + 1}
               </button>
             ))}
           </div>
-          <button className="go" onClick={() => analyze()} disabled={loading || !text.trim()}>
-            {loading ? "Analyzing…" : "Analyze"}
-            <span className="hint">⌘↵</span>
+          <button className="go" disabled={loading || !text.trim()} onClick={() => analyze()}>
+            {loading ? "Reading…" : "Analyze"}
+            <span className="kbd">⌘↵</span>
           </button>
         </div>
       </section>
 
-      {error && <div className="error">⚠ {error}</div>}
+      {err && <div className="err">⚠ {err}</div>}
 
-      {result && (
-        <section className="results">
-          <div className="grid">
-            <ScoreCard title="Sentiment" label={result.sentiment} score={result.sentiment_score} />
-            <ScoreCard title="Emotion" label={result.emotion} score={result.emotion_score} />
-            <ScoreCard title="Toxicity" label={result.toxicity} score={result.toxicity_score} />
-          </div>
+      {res && (
+        <div className="results">
+          {/* Signature: sentiment spectrum */}
+          <section className="card reveal">
+            <div className="card-h">
+              <span className="t">Sentiment spectrum</span>
+              <span className="v">3-class</span>
+            </div>
+            <div className="spectrum-read">
+              <span
+                className="label"
+                style={{
+                  color:
+                    res.sentiment === "positive"
+                      ? "var(--pos)"
+                      : res.sentiment === "negative"
+                        ? "var(--neg)"
+                        : "var(--neu)",
+                }}
+              >
+                {res.sentiment}
+              </span>
+              <span className="conf">{pct(res.sentiment_probs[res.sentiment] ?? 0)} confident</span>
+            </div>
+            <div className="spectrum">
+              <div className="marker" style={{ left: `${markerLeft}%` }} />
+            </div>
+            <div className="spectrum-scale">
+              <span>negative</span>
+              <span>neutral</span>
+              <span>positive</span>
+            </div>
+          </section>
 
-          <div className="entities">
-            <div className="card-title">Named entities</div>
-            {result.entities.length === 0 ? (
-              <div className="muted">No entities detected.</div>
-            ) : (
-              <div className="chips">
-                {result.entities.map((e, i) => (
-                  <span key={i} className="entity">
-                    {e.text}
-                    <em>{e.entity_type}</em>
-                    {e.canonical_id && <b>{e.canonical_id}</b>}
-                  </span>
+          <div className="two">
+            {/* All six emotions */}
+            <section className="card reveal">
+              <div className="card-h">
+                <span className="t">Emotion</span>
+                <span className="v">6-class</span>
+              </div>
+              <div className="bars">
+                {emotions.map(([name, p], i) => (
+                  <div className={`bar ${i === 0 ? "top" : ""}`} key={name}>
+                    <span className="name">{name}</span>
+                    <span className="track">
+                      <span
+                        className="fill"
+                        style={{ width: pct(p), background: EMO_COLOR[name] ?? "var(--neu)" }}
+                      />
+                    </span>
+                    <span className="pct">{pct(p)}</span>
+                  </div>
                 ))}
               </div>
-            )}
+            </section>
+
+            {/* Toxicity + entities */}
+            <div style={{ display: "grid", gap: 16 }}>
+              <section className="card reveal">
+                <div className="card-h">
+                  <span className="t">Toxicity</span>
+                  <span className="v">binary</span>
+                </div>
+                <div className="gauge">
+                  <span className="val" style={{ color: toxic ? "var(--neg)" : "var(--pos)" }}>
+                    {toxic ? "Toxic" : "Clean"}
+                  </span>
+                  <span className="track">
+                    <span
+                      className="fill"
+                      style={{ width: pct(toxP), background: toxic ? "var(--neg)" : "var(--pos)" }}
+                    />
+                  </span>
+                  <span className="scale">{pct(toxP)} toxic probability</span>
+                </div>
+              </section>
+
+              <section className="card reveal">
+                <div className="card-h">
+                  <span className="t">Entities</span>
+                  <span className="v">NER + brands</span>
+                </div>
+                {res.entities.length === 0 ? (
+                  <span className="empty">No named entities detected.</span>
+                ) : (
+                  <div className="ents">
+                    {res.entities.map((e, i) => (
+                      <span className="ent" key={i}>
+                        {e.text}
+                        <span className="ty">{e.entity_type}</span>
+                        {e.canonical_id && <span className="brand">{e.canonical_id}</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
 
           <div className="meta">
             <span>
-              uncertainty (entropy) <strong>{result.uncertainty.toFixed(3)}</strong>
+              predictive entropy <b>{res.uncertainty.toFixed(3)}</b>
             </span>
             <span>
-              inference <strong>{result.inference_latency_ms.toFixed(1)} ms</strong>
+              inference <b>{res.inference_latency_ms.toFixed(0)} ms</b>
+            </span>
+            <span>
+              backbone <b>1× RoBERTa · 3 heads</b>
             </span>
           </div>
-        </section>
+        </div>
       )}
 
       <footer className="foot">
-        Backend: FastAPI on a free Hugging Face Space · Frontend: Next.js on Vercel ·{" "}
-        <a href="https://github.com/sbokk/NLP-Pipeline-at-Scale">source</a>
+        <span>Multi-task RoBERTa · single forward pass · trained in PyTorch</span>
+        <a href="https://github.com/shiva-shivanibokka/NLP-Pipeline-at-Scale">source ↗</a>
       </footer>
     </main>
   );

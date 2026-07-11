@@ -164,10 +164,13 @@ class AnalyzeResponse(BaseModel):
     text: str
     sentiment: str
     sentiment_score: float
+    sentiment_probs: dict[str, float]
     emotion: str
     emotion_score: float
+    emotion_probs: dict[str, float]
     toxicity: str
     toxicity_score: float
+    toxicity_probs: dict[str, float]
     uncertainty: float
     entities: list[dict]
     topic_id: int
@@ -206,6 +209,14 @@ async def analyze(request: AnalyzeRequest):
     e_pred = int(preds["emotion_pred"][0])
     t_pred = int(preds["toxicity_pred"][0])
 
+    # Full per-class distributions so the UI can show every class, not just top-1.
+    def _dist(labels, probs):
+        return {lab: round(float(probs[i]), 4) for i, lab in enumerate(labels)}
+
+    s_dist = _dist(SENTIMENT_LABELS, preds["sentiment_probs"][0])
+    e_dist = _dist(EMOTION_LABELS, preds["emotion_probs"][0])
+    t_dist = _dist(TOXICITY_LABELS, preds["toxicity_probs"][0])
+
     entities = []
     if request.include_entities:
         ner = _get_ner()
@@ -233,10 +244,13 @@ async def analyze(request: AnalyzeRequest):
         text=request.text,
         sentiment=SENTIMENT_LABELS[s_pred],
         sentiment_score=round(float(preds["sentiment_probs"][0][s_pred]), 4),
+        sentiment_probs=s_dist,
         emotion=EMOTION_LABELS[e_pred],
         emotion_score=round(float(preds["emotion_probs"][0][e_pred]), 4),
+        emotion_probs=e_dist,
         toxicity=TOXICITY_LABELS[t_pred],
         toxicity_score=round(float(preds["toxicity_probs"][0][1]), 4),
+        toxicity_probs=t_dist,
         uncertainty=round(float(preds["aggregate_entropy"][0]), 4),
         entities=entities,
         topic_id=topic_id,
