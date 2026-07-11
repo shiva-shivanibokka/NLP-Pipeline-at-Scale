@@ -100,8 +100,7 @@ export default function Home() {
       <header>
         <span className="eyebrow">Multi-task NLP · Social listening</span>
         <h1>
-          Read the <span className="em">signal</span> in
-          <br /> every sentence.
+          Read the <span className="em">signal</span> in every sentence.
         </h1>
         <p className="lede">
           One shared RoBERTa pass scores <b>sentiment</b>, all six <b>emotions</b>, and{" "}

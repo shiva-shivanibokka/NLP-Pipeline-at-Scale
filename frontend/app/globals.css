@@ -83,10 +83,14 @@ body::before {
 h1 {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(2.2rem, 6vw, 3.9rem);
-  line-height: 1.02;
+  /* sized to sit on ONE line across desktop widths (wraps only on small screens) */
+  font-size: clamp(1.5rem, 4vw, 3.25rem);
+  line-height: 1.06;
   letter-spacing: -0.03em;
-  margin: 18px 0 14px;
+  margin: 18px 0 16px;
+}
+@media (min-width: 720px) {
+  h1 { white-space: nowrap; }
 }
 h1 .em {
   background: linear-gradient(96deg, var(--pos), var(--surprise) 50%, var(--love));
@@ -185,11 +189,19 @@ h1 .em {
 /* ── Input console ──────────────────────────────────────── */
 .console {
   margin-top: 34px;
-  background: linear-gradient(180deg, var(--panel), var(--panel-2));
-  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 16px;
-  box-shadow: 0 24px 60px -40px #000;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, var(--panel), var(--panel-2)) padding-box,
+    linear-gradient(
+        140deg,
+        color-mix(in srgb, var(--pos) 32%, var(--line-2)),
+        var(--line) 42%,
+        color-mix(in srgb, var(--ink) 32%, var(--line-2))
+      )
+      border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -40px #000;
 }
 textarea {
   width: 100%;
@@ -267,10 +279,20 @@ textarea:focus { border-color: var(--ink); }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .card {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  position: relative;
   border-radius: var(--r);
   padding: 20px clamp(16px, 3vw, 24px);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(
+        140deg,
+        color-mix(in srgb, var(--pos) 32%, var(--line-2)),
+        var(--line) 42%,
+        color-mix(in srgb, var(--ink) 32%, var(--line-2))
+      )
+      border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 22px 55px -34px #000;
 }
 .card-h {
   display: flex;
