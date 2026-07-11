@@ -1,6 +1,6 @@
 # NLP Pipeline at Scale — Real-Time Social Listening
 
-**▶️ Live demo:** [frontend-shiv-a.vercel.app](https://frontend-shiv-a.vercel.app) — type any text, get real-time multi-task predictions.
+**▶️ Live demo:** [nlp-pipeline-at-scale-shiv-a.vercel.app](https://nlp-pipeline-at-scale-shiv-a.vercel.app) — type any text, get real-time multi-task predictions.
 Frontend on **Vercel** (Next.js) → model API on **Google Cloud Run** (FastAPI + trained RoBERTa), all on free tiers.
 *(Scale-to-zero backend: the first request after idle takes ~15–20s to warm up.)*
 
