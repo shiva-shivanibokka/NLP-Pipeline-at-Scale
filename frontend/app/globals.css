@@ -24,9 +24,9 @@
   /* chrome accent (indigo) — kept off the semantic data hues */
   --ink: #7c5cff;
 
-  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
+  /* next/font sets --font-display / --font-body / --font-mono on <html>; use them
+     directly. (Do NOT redefine them here as var(--font-*) — that self-reference is
+     circular and falls back to a serif.) */
 
   --r: 16px;
 }
@@ -41,7 +41,7 @@ body {
     radial-gradient(700px 500px at 8% 4%, rgba(45, 212, 167, 0.06), transparent 55%),
     var(--bg);
   color: var(--text);
-  font-family: var(--font-body);
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -285,6 +285,7 @@ textarea:focus { border-color: var(--ink); }
 .bar .name { color: var(--muted); text-transform: capitalize; }
 .bar.top .name { color: var(--text); font-weight: 500; }
 .bar .track {
+  display: block;
   height: 10px;
   border-radius: 999px;
   background: var(--panel-2);
@@ -292,6 +293,7 @@ textarea:focus { border-color: var(--ink); }
   border: 1px solid var(--line);
 }
 .bar .fill {
+  display: block;
   height: 100%;
   border-radius: 999px;
   width: 0;
@@ -310,8 +312,8 @@ textarea:focus { border-color: var(--ink); }
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.gauge .track { height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--line); }
-.gauge .fill { height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+.gauge .track { display: block; height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--line); }
+.gauge .fill { display: block; height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 .gauge .scale { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
 
 /* entities */
