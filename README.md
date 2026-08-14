@@ -1,5 +1,15 @@
 # NLP Pipeline at Scale — Real-Time Social Listening
 
+> [!IMPORTANT]
+> **The hosted demo is temporary.** This project's backend runs on Google Cloud
+> Run under a Google Cloud free trial that ends **around 19 September 2026**.
+> When the trial closes the service is stopped, and every `run.app` link below
+> stops responding.
+>
+> Nothing in this repository depends on that. The code, tests and results are
+> complete, and the instructions below run the whole thing locally.
+
+
 > **Recruiter TL;DR**
 > - **What it is:** a production, end-to-end NLP system that reads social-media text three ways at once — sentiment, emotion, and toxicity — from a *single* RoBERTa forward pass, plus named-entity extraction with brand normalization, streaming inference over Kafka, online topic modeling, and statistical anomaly detection.
 > - **Hardest problem solved:** a shared-backbone **multi-task** model that matches three separate fine-tuned models on accuracy while using **3× fewer parameters and ~2× lower latency** — validated with a controlled 3-way ablation on held-out test data.
