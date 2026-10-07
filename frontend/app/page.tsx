@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Entity = { text: string; entity_type: string; score: number; canonical_id: string | null };
 type Result = {
@@ -62,6 +62,31 @@ export default function Home() {
   const [res, setRes] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Backend liveness for the header badge. Three states on purpose: until the
+  // probe answers we claim nothing. The badge was previously hardcoded to
+  // "live", which kept asserting a Cloud Run service that no longer exists.
+  const [health, setHealth] = useState<"checking" | "up" | "down">("checking");
+  const [healthReason, setHealthReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { up?: boolean; reason?: string }) => {
+        if (cancelled) return;
+        setHealth(d.up ? "up" : "down");
+        setHealthReason(d.reason ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHealth("down");
+          setHealthReason("health check failed");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function analyze(input?: string) {
     const t = (input ?? text).trim();
@@ -107,9 +132,20 @@ export default function Home() {
           <b>toxicity</b> at once — then pulls out the <b>brands</b> being talked about. Type
           anything and watch it decode.
         </p>
-        <span className="live">
-          <span className="dot" /> live · served from Google Cloud Run
-        </span>
+        {health === "checking" ? (
+          <span className="live checking">
+            <span className="dot" /> checking backend…
+          </span>
+        ) : health === "up" ? (
+          <span className="live">
+            <span className="dot" /> live · served from Google Cloud Run
+          </span>
+        ) : (
+          <span className="live offline" title={healthReason ?? undefined}>
+            <span className="dot off" /> model backend offline — the demo below
+            will not return results
+          </span>
+        )}
       </header>
 
       <div className="explainer">
@@ -153,9 +189,13 @@ export default function Home() {
           </button>
         </div>
         <p className="cold-note">
-          {loading
-            ? "Waking the model if it was idle — the first request can take ~20s."
-            : "Free scale-to-zero backend: the first request after idle wakes the model (~20s), then it's fast."}
+          {/* Describing a cold start implies there is something to warm up. When
+              the probe says the backend is gone, say that instead. */}
+          {health === "down"
+            ? `The model backend is not reachable${healthReason ? ` (${healthReason})` : ""}, so Analyze will return an error. The measured results in the README stand on their own; this live demo does not.`
+            : loading
+              ? "Waking the model if it was idle — the first request can take ~20s."
+              : "Free scale-to-zero backend: the first request after idle wakes the model (~20s), then it's fast."}
         </p>
       </section>
 

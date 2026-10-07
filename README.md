@@ -103,15 +103,96 @@ Real numbers from a full run on a single RTX 4060 (`roberta-base`, 5 epochs, fp1
 | Hard sharing (equal weights) | 0.700 | 0.884 | 0.478 | 12.6 ms | 125 M |
 | **Uncertainty weighted** | 0.700 | **0.888** | 0.473 | **12.4 ms** | 125 M |
 
-**Takeaway:** one shared backbone matches three separate models within ~1 F1 point on every task at **3× fewer parameters and ~2× lower latency**. The efficiency win is the headline; accuracy is a wash. (Toxicity F1 is low across the board — the `tweet_eval/hate` test set has a known train→test distribution shift; validation F1 was ~0.78. We report **test** to stay honest.)
+**Takeaway:** one shared backbone comes within **1.8 F1 points** of three separate
+models on every task, at **3.0× fewer parameters** (373 M → 125 M) and **2.2×
+lower p99 latency** (27.0 → 12.4 ms). The efficiency win is the headline.
+
+Exact deltas against the independent baseline, because "a wash" hides which task
+pays for the sharing:
+
+| | Sentiment | Emotion | Toxicity |
+|---|---|---|---|
+| Hard sharing | −0.92 | **+0.48** | −1.28 |
+| **Uncertainty weighted** (shipped) | −0.93 | **+0.92** | **−1.78** |
+
+Toxicity carries the whole cost and loses **1.78 F1 points**, not ~1 — an earlier
+version of this line said "within ~1 F1 point on every task", which understated
+the only real regression. Emotion actually *improves* under sharing. So the
+trade is not uniform: sharing helps the task with the most data and hurts the one
+with the least.
+
+(Toxicity F1 is low across the board — the `tweet_eval/hate` test set has a known
+train→test distribution shift; validation F1 was ~0.78. We report **test** to stay
+honest, which also means the 1.78-point gap is measured on the noisiest of the
+three tasks.)
+
+**Single run per strategy, no seed replication**, so none of these deltas carries
+an uncertainty estimate and a 1.8-point gap on a shifted test set should not be
+treated as precisely resolved.
 
 ### Throughput vs. latency benchmark
 
-Saturation point ≈ **1500 msg/s** — the consumer keeps up 1:1 to ~1000 msg/s, plateaus at a max sustained ~1250 msg/s, then queue lag grows unbounded. Per-message inference p99 ≈ 1.0 ms.
+**This benchmark does not measure the model, and the numbers it produces must not
+be read as pipeline performance.** `src/benchmark/throughput.py` runs against
+`MockInferencePipeline`, whose `process_batch` is
+`time.sleep(25 ms × n / 32)`. It exercises batch assembly and consumer
+back-pressure without a GPU, which is genuinely useful — but the resulting
+"saturation ≈ 1500 msg/s, inference p99 ≈ 1.0 ms" was a measurement of
+`time.sleep`. The arithmetic is visible: 25 ms ÷ 32 = **0.78 ms/msg**, which is
+exactly the published p50.
+
+Real per-batch cost of the shipped `MultiTaskRoBERTa` (roberta-base backbone,
+batch 32, seq len 128, median of 15 iterations after 3 warmups, tokenization
+excluded — so these are **lower bounds**):
+
+| backend | ms / batch of 32 | ms / msg | msg/s, one worker |
+|---|---|---|---|
+| `MockInferencePipeline` | 25.0 | 0.78 | 1280 |
+| **RTX 4060 Laptop GPU** | **104.0** | **3.25** | **308** |
+| **CPU** | **2517.9** | **78.69** | **12.7** |
+
+So the simulation is optimistic by **4.2× on GPU and 101× on CPU**. Note also
+that the published 1500 msg/s saturation point exceeded even the mock's own
+single-worker ceiling of 1280 msg/s — the figure was not internally consistent.
+Reaching 1500 msg/s with real inference would need roughly five concurrent GPU
+workers.
+
+Reproduce the real measurement: `python scripts/measure_real_inference.py`.
+Every benchmark report is now stamped `inference_backend` and carries a
+`warning` field when simulated, so the provenance travels with the file
+(`tests/test_benchmark_provenance.py` enforces this).
+
+**What the benchmark does legitimately show:** the batching and back-pressure
+logic behaves correctly — the consumer tracks the producer 1:1 until the
+configured inference budget is exhausted, then lag grows monotonically rather
+than thrashing. That is a statement about the streaming code, not about speed.
 
 ### Active learning
 
-Entropy-based uncertainty sampling vs. random (sentiment, seed 200, +50/round × 10). Honest, mixed result: uncertainty sampling is **statistically on par with random** at this small query-batch scale — both reach ~0.63 F1 at 700 labels. A useful negative result, not an inflated win.
+Entropy-based uncertainty sampling vs. random (sentiment, +50 labels/round × 10,
+from a 200-label seed set). Both arms reach ~0.63 F1 at 700 labels.
+
+**This is a single run per arm — one seed, no replicates — so no statistical
+claim is available from it.** An earlier version of this section called the two
+"statistically on par", which cannot be concluded without a variance estimate;
+there is none here. The honest description is that **the curves are close and
+uncertainty sampling does not lead**:
+
+| labels | uncertainty | random | Δ |
+|---|---|---|---|
+| 300 | 0.2784 | 0.3364 | −0.0580 |
+| 400 | 0.5833 | 0.5919 | −0.0086 |
+| 500 | 0.6070 | 0.6161 | −0.0091 |
+| 550 | 0.6049 | 0.6338 | −0.0289 |
+| 650 | 0.6323 | 0.6105 | **+0.0218** |
+| 700 | 0.6309 | 0.6237 | **+0.0072** |
+
+Uncertainty sampling is **behind random at 8 of the 11 checkpoints** and ahead at
+2 (they tie at the first two, before either has queried anything). The final
++0.0072 is the last point of a noisy single-seed curve, not an effect. Reading
+this as "no benefit at this scale" is reasonable; reading it as a tested
+equivalence is not, and replicating across seeds is the work that would license
+any stronger statement.
 
 ---
 

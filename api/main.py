@@ -40,9 +40,27 @@ _ner = None
 _aggregator = None
 _topic_model = None
 
+# Whether the loaded model has trained weights. None = not loaded yet.
+# This used to exist only as a print to stdout, which meant a client received
+# confident-looking class probabilities from a randomly-initialised backbone with
+# nothing in the response to say so. It is now reported by /analyze and /health.
+_model_is_trained: Optional[bool] = None
+_model_checkpoint: Optional[str] = None
+
+UNTRAINED_WARNING = (
+    "No trained weights were found, so these predictions come from a "
+    "randomly-initialised backbone and are meaningless. Set HF_MODEL_REPO or "
+    "MODEL_CKPT_PATH to serve a trained checkpoint."
+)
+TOPICS_UNAVAILABLE_WARNING = (
+    "Topic assignment is unavailable in this deployment: the `bertopic` package "
+    "is not installed (it is intentionally absent from requirements-api.txt, "
+    "which is the slim serving image). topic_id is reported as -1."
+)
+
 
 def _get_model():
-    global _model, _tokenizer
+    global _model, _tokenizer, _model_is_trained, _model_checkpoint
     if _model is None:
         from transformers import AutoTokenizer
         from src.model.multitask_model import MultiTaskRoBERTa
@@ -55,12 +73,12 @@ def _get_model():
         if ckpt:
             _model.load_state_dict(torch.load(ckpt, map_location="cpu"))
             print(f"[model] Loaded trained weights from {ckpt}")
+            _model_is_trained = True
+            _model_checkpoint = ckpt
         else:
-            print(
-                "[model] WARNING: no trained weights found — serving an untrained "
-                "backbone (predictions are meaningless). Train and set HF_MODEL_REPO "
-                "or MODEL_CKPT_PATH."
-            )
+            print(f"[model] WARNING: {UNTRAINED_WARNING}")
+            _model_is_trained = False
+            _model_checkpoint = None
         _model.eval()
     return _model, _tokenizer
 
@@ -101,6 +119,13 @@ def _get_ner():
     return _ner
 
 
+def _topics_available() -> bool:
+    """Is bertopic importable in this deployment? Cheap: importlib only."""
+    import importlib.util
+
+    return importlib.util.find_spec("bertopic") is not None
+
+
 def _get_aggregator():
     global _aggregator
     if _aggregator is None:
@@ -111,10 +136,22 @@ def _get_aggregator():
 
 
 def _get_topic_model():
+    """Return the topic model, or None when bertopic is not installed.
+
+    `bertopic` is deliberately absent from `requirements-api.txt` (the slim
+    Cloud Run image). Because `include_topics` defaulted to True, every
+    default-shaped request in that image raised ImportError inside the handler
+    and returned a 500 — the endpoint's documented default could not succeed
+    where it was deployed. Returning None lets /analyze degrade to topic_id=-1
+    with an explicit warning instead of failing.
+    """
     global _topic_model
     if _topic_model is None:
-        from src.topics.online_bertopic import OnlineBERTopic
-
+        try:
+            from src.topics.online_bertopic import OnlineBERTopic
+        except ImportError as e:
+            print(f"[topics] bertopic unavailable, topic assignment disabled: {e}")
+            return None
         _topic_model = OnlineBERTopic()
     return _topic_model
 
@@ -175,6 +212,13 @@ class AnalyzeResponse(BaseModel):
     entities: list[dict]
     topic_id: int
     inference_latency_ms: float
+    # Whether the weights behind these predictions were actually trained. A
+    # client has no other way to tell: an untrained backbone still returns a
+    # well-formed probability distribution.
+    model_trained: bool = True
+    # Non-fatal caveats that apply to THIS response (untrained weights, topic
+    # assignment unavailable, ...). Empty list is the healthy case.
+    warnings: list[str] = []
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -182,7 +226,20 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "0.1.0"}
+    """Liveness plus the two states a caller cannot otherwise observe.
+
+    `status` stays "ok" when the process is serving, but `model_trained` False
+    means the predictions are from a randomly-initialised backbone. Reporting
+    only "ok" in that state is what let an untrained deployment look healthy.
+    """
+    return {
+        "status": "ok",
+        "version": "0.1.0",
+        "model_loaded": _model is not None,
+        "model_trained": _model_is_trained,
+        "model_checkpoint": _model_checkpoint,
+        "topics_available": _topics_available(),
+    }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -222,11 +279,18 @@ async def analyze(request: AnalyzeRequest):
         ner = _get_ner()
         entities = ner.extract(request.text)
 
+    warnings: list[str] = []
+    if _model_is_trained is False:
+        warnings.append(UNTRAINED_WARNING)
+
     topic_id = -1
     if request.include_topics:
         tm = _get_topic_model()
-        topic_ids = tm.transform_batch([request.text])
-        topic_id = topic_ids[0] if topic_ids else -1
+        if tm is None:
+            warnings.append(TOPICS_UNAVAILABLE_WARNING)
+        else:
+            topic_ids = tm.transform_batch([request.text])
+            topic_id = topic_ids[0] if topic_ids else -1
 
     # Update aggregator
     record = {
@@ -255,6 +319,8 @@ async def analyze(request: AnalyzeRequest):
         entities=entities,
         topic_id=topic_id,
         inference_latency_ms=round(latency_ms, 2),
+        model_trained=bool(_model_is_trained),
+        warnings=warnings,
     )
 
 

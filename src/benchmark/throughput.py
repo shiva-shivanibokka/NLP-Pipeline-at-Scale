@@ -55,9 +55,40 @@ class BenchmarkReport:
     saturation_point_msgs_per_sec: Optional[int] = None
     batch_size: int = BENCHMARK_BATCH_SIZE
     max_wait_ms: int = BENCHMARK_MAX_WAIT_MS
+    #: Which inference backend produced these numbers. "mock-time-sleep" means
+    #: no model ran -- see MockInferencePipeline. Stamped by run_benchmark().
+    inference_backend: str = "unknown"
+    #: True when the transport was a real Kafka cluster rather than the
+    #: in-process simulation.
+    real_kafka: bool = False
+
+    @property
+    def is_simulated(self) -> bool:
+        return self.inference_backend == MockInferencePipeline.BACKEND_ID
+
+    @property
+    def provenance_warning(self) -> Optional[str]:
+        """The sentence that must accompany these numbers, or None if real."""
+        if not self.is_simulated:
+            return None
+        return (
+            "SIMULATED: inference was time.sleep(), not a model. These "
+            "throughput and latency figures measure the batching loop only and "
+            "must not be cited as pipeline performance. Measured real cost for "
+            "the same batch shape: 104.0 ms/batch of 32 on an RTX 4060 Laptop "
+            "GPU (308 msg/s per worker) and 2517.9 ms on CPU (12.7 msg/s), so "
+            "this run is optimistic by ~4.2x and ~101x respectively. "
+            "Reproduce: python scripts/measure_real_inference.py"
+        )
 
     def to_dict(self) -> dict:
         return {
+            # Provenance first, so it is the first thing anyone reading the file
+            # sees -- including a future reader who only skims the top.
+            "inference_backend": self.inference_backend,
+            "real_kafka": self.real_kafka,
+            "simulated": self.is_simulated,
+            "warning": self.provenance_warning,
             "saturation_point_msgs_per_sec": self.saturation_point_msgs_per_sec,
             "batch_size": self.batch_size,
             "max_wait_ms": self.max_wait_ms,
@@ -79,8 +110,27 @@ class BenchmarkReport:
 
     def print_table(self):
         print("\n" + "=" * 85)
-        print("THROUGHPUT vs LATENCY BENCHMARK")
+        title = "THROUGHPUT vs LATENCY BENCHMARK"
+        if self.is_simulated:
+            title += "  [SIMULATED - NOT A MODEL]"
+        print(title)
         print(f"Batch size: {self.batch_size}, Max wait: {self.max_wait_ms}ms")
+        print(
+            f"Inference backend: {self.inference_backend}   "
+            f"Transport: {'real Kafka' if self.real_kafka else 'in-process simulation'}"
+        )
+        if self.provenance_warning:
+            print("-" * 85)
+            # Wrap by hand rather than pulling in textwrap for one call site.
+            words, line = self.provenance_warning.split(), ""
+            for w in words:
+                if len(line) + len(w) + 1 > 83:
+                    print(line)
+                    line = w
+                else:
+                    line = f"{line} {w}".strip()
+            if line:
+                print(line)
         print("=" * 85)
         print(
             f"{'Rate':>8} {'Actual':>8} {'Consumer':>10} {'Lag':>8} {'p50':>8} {'p95':>8} {'p99':>8} {'Ratio':>7} {'Status':>10}"
@@ -110,13 +160,38 @@ class BenchmarkReport:
 
 
 class MockInferencePipeline:
-    """
-    Mock NLP pipeline for benchmark runs without a real model.
-    Simulates realistic inference latency per batch.
+    """A placeholder that sleeps. It does NOT run a model.
 
-    In production benchmark mode, replace this with the real NLPConsumer.
-    This allows running the throughput benchmark without training the model first.
+    ``process_batch`` is ``time.sleep(inference_ms_per_batch * n / 32)``. Any
+    throughput or latency figure produced with this class is a measurement of
+    ``time.sleep`` and of the batch-assembly loop around it -- nothing else. It
+    is useful for exercising the consumer's batching and back-pressure logic
+    without a GPU; it is not evidence about how fast the pipeline is.
+
+    **The default 25 ms/batch is not realistic and must not be presented as
+    such.** Measured on 2026-10-07 with the actual ``MultiTaskRoBERTa``
+    (roberta-base backbone, batch 32, seq len 128, median of 15 iterations after
+    3 warmups, excluding tokenization):
+
+    | backend | ms/batch of 32 | ms/msg | msg/s, 1 worker |
+    |---|---|---|---|
+    | this mock | 25.0 | 0.78 | 1280 |
+    | RTX 4060 Laptop GPU | **104.0** | 3.25 | **308** |
+    | CPU | **2517.9** | 78.69 | **12.7** |
+
+    So the mock is optimistic by **4.2x on GPU and 101x on CPU**, and those
+    factors are lower bounds because tokenization is excluded. Reproduce with
+    ``scripts/measure_real_inference.py``.
+
+    Every report produced with this backend is stamped
+    ``inference_backend: "mock-time-sleep"`` and carries a ``warning`` field, so
+    the provenance travels with the numbers instead of living in a docstring
+    nobody reads. See ``BenchmarkReport.to_dict``.
     """
+
+    #: Stamped into every report so a JSON file can never be mistaken for a real
+    #: measurement. Do not change without changing the consumers of that field.
+    BACKEND_ID = "mock-time-sleep"
 
     def __init__(self, inference_ms_per_batch: float = 25.0):
         self.inference_ms_per_batch = inference_ms_per_batch
@@ -186,7 +261,16 @@ def run_benchmark(
         inference_pipeline = MockInferencePipeline(inference_ms_per_batch=25.0)
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    report = BenchmarkReport(batch_size=batch_size, max_wait_ms=max_wait_ms)
+    report = BenchmarkReport(
+        batch_size=batch_size,
+        max_wait_ms=max_wait_ms,
+        real_kafka=use_real_kafka,
+        inference_backend=getattr(
+            inference_pipeline, "BACKEND_ID", type(inference_pipeline).__name__
+        ),
+    )
+    if report.is_simulated and verbose:
+        print(f"\n[benchmark] *** {report.provenance_warning}\n")
 
     for target_rate in throughput_levels:
         if verbose:

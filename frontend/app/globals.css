@@ -129,6 +129,23 @@ h1 .em {
   100% { box-shadow: 0 0 0 0 rgba(45, 212, 167, 0); }
 }
 
+/* The badge has three states, because the page cannot know the backend is up
+   until it has asked. `.live` alone is the "up" case. */
+.live.checking .dot {
+  background: var(--muted);
+  animation: none;
+  box-shadow: none;
+}
+.live.offline {
+  border-color: var(--neg, #e5534b);
+  color: var(--neg, #e5534b);
+}
+.live.offline .dot.off {
+  background: var(--neg, #e5534b);
+  animation: none;          /* a dead backend should not pulse like a live one */
+  box-shadow: none;
+}
+
 /* ── Explainer box ──────────────────────────────────────── */
 .explainer {
   margin-top: 26px;
