@@ -1,28 +1,29 @@
 # NLP Pipeline at Scale — Real-Time Social Listening
 
 > [!IMPORTANT]
-> **The hosted demo is temporary.** This project's backend runs on Google Cloud
-> Run under a Google Cloud free trial that ends **around 19 September 2026**.
-> When the trial closes the service is stopped, and every `run.app` link below
-> stops responding.
+> **The hosted demo is offline.** The backend ran on Google Cloud Run under a
+> free trial that has since closed, so the Cloud Run service no longer exists and
+> every `run.app` link below is dead. The Vercel frontend still loads and now
+> detects this: it shows "model backend offline" instead of claiming to be live.
 >
-> Nothing in this repository depends on that. The code, tests and results are
-> complete, and the instructions below run the whole thing locally.
+> Nothing in this repository depends on that. The code, tests and measured
+> results are complete, and the instructions below run the whole thing locally.
+> See [RESULTS.md](RESULTS.md) for what was measured and what was withdrawn.
 
 
 > **Recruiter TL;DR**
 > - **What it is:** a production, end-to-end NLP system that reads social-media text three ways at once — sentiment, emotion, and toxicity — from a *single* RoBERTa forward pass, plus named-entity extraction with brand normalization, streaming inference over Kafka, online topic modeling, and statistical anomaly detection.
-> - **Hardest problem solved:** a shared-backbone **multi-task** model that matches three separate fine-tuned models on accuracy while using **3× fewer parameters and ~2× lower latency** — validated with a controlled 3-way ablation on held-out test data.
-> - **Impact (measured):** live, free-tier deployment (Vercel + Google Cloud Run) serving real predictions; multi-task model = **125M params / 12.4ms p99** vs. a 373M / 27ms independent baseline at ~equal F1.
+> - **Hardest problem solved:** a shared-backbone **multi-task** model that comes within **1.8 macro-F1 points** of three separate fine-tuned models while using **3.0× fewer parameters and 2.2× lower p99 latency** — validated with a controlled 3-way ablation on held-out test data. Not "equal": toxicity loses 1.78 points, emotion *gains* 0.92. [Exact deltas](RESULTS.md).
+> - **Measured:** multi-task model = **125M params / 12.4ms p99** vs. a 373M / 27.0ms independent baseline. Single run per strategy, no seed replication, so these deltas carry no uncertainty estimate.
+> - **Not measured, and previously claimed:** throughput. The committed benchmark ran against a mock whose inference is `time.sleep` — see [RESULTS.md §1](RESULTS.md). Real cost is 104–115 ms/batch of 32 on an RTX 4060 (277–308 msg/s per worker), not the ~1500 msg/s this README used to cite.
 
-**▶️ Live demo:** **[nlp-pipeline-at-scale-shiv-a.vercel.app](https://nlp-pipeline-at-scale-shiv-a.vercel.app)** — type any text, watch it decode in real time.
+**Frontend (model backend offline):** [nlp-pipeline-at-scale-shiv-a.vercel.app](https://nlp-pipeline-at-scale-shiv-a.vercel.app) — the page loads and reports that its backend is gone. Analyze will return an error. To run it for real, see [Quickstart](#quickstart).
 
 ![CI](https://github.com/shiva-shivanibokka/NLP-Pipeline-at-Scale/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/shiva-shivanibokka/NLP-Pipeline-at-Scale/actions/workflows/deploy.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Deployed](https://img.shields.io/badge/deployed-Vercel%20%2B%20Cloud%20Run-brightgreen)
 
 A real-time social-listening pipeline that ingests a tweet stream via **Kafka**, runs **multi-task RoBERTa** inference (joint sentiment + emotion + toxicity in one forward pass), extracts named entities with brand normalization, assigns topics via **online incremental BERTopic**, and surfaces **brand-sentiment anomalies** with Statistical Process Control. Trained on real data (`cardiffnlp/tweet_eval`, `dair-ai/emotion`) — no synthetic datasets.
 
@@ -30,19 +31,23 @@ A real-time social-listening pipeline that ingests a tweet stream via **Kafka**,
 
 ## Why this exists
 
-Most NLP portfolio projects stop at a single-task notebook: fine-tune BERT on one dataset, print an F1, done. This project is deliberately the opposite — it takes a single model all the way from **research** (a controlled multi-task ablation) through **serving** (a streaming inference pipeline) to **deployment** (a live, publicly clickable demo), on **free tiers only**. The goal was to demonstrate the full lifecycle a production ML engineer owns — model design, evaluation rigor, a serving layer, benchmarking, and cloud deployment — not just the modeling step. It's a portfolio piece; the design choices are made to be defensible in an interview.
+Most NLP portfolio projects stop at a single-task notebook: fine-tune BERT on one dataset, print an F1, done. This project is deliberately the opposite — it takes a single model all the way from **research** (a controlled multi-task ablation) through **serving** (a streaming inference pipeline) to **deployment** (a publicly clickable demo, whose free-tier backend has since been shut down), on **free tiers only**. The goal was to demonstrate the full lifecycle a production ML engineer owns — model design, evaluation rigor, a serving layer, benchmarking, and cloud deployment — not just the modeling step. It's a portfolio piece; the design choices are made to be defensible in an interview.
 
 ---
 
 ## Live demo & endpoints
 
-| Piece | URL |
-|---|---|
-| Frontend (Next.js on **Vercel**) | https://nlp-pipeline-at-scale-shiv-a.vercel.app |
-| Model API (FastAPI on **Google Cloud Run**) | https://nlp-pipeline-api-1061434430143.us-central1.run.app |
-| Trained weights (**Hugging Face Hub**) | https://huggingface.co/shiva-1993/nlp-pipeline-multitask |
+| Piece | URL | Status |
+|---|---|---|
+| Frontend (Next.js on **Vercel**) | https://nlp-pipeline-at-scale-shiv-a.vercel.app | **up** — detects and reports the dead backend |
+| Model API (FastAPI on **Google Cloud Run**) | `https://nlp-pipeline-api-…us-central1.run.app` | **gone** — free trial closed |
+| Trained weights (**Hugging Face Hub**) | https://huggingface.co/shiva-1993/nlp-pipeline-multitask | up |
 
-The backend is scale-to-zero, so the **first request after idle takes ~15–20s** to warm the model; subsequent requests are ~300–600ms.
+While it ran, the backend was scale-to-zero, so the first request after idle took
+~15–20s to warm the model. A "~300–600ms warm request" figure previously appeared
+here; it has no recorded provenance, so it has been removed rather than restated.
+The per-batch inference cost that *is* measured is in
+[RESULTS.md §1](RESULTS.md).
 
 ---
 
@@ -142,20 +147,27 @@ back-pressure without a GPU, which is genuinely useful — but the resulting
 exactly the published p50.
 
 Real per-batch cost of the shipped `MultiTaskRoBERTa` (roberta-base backbone,
-batch 32, seq len 128, median of 15 iterations after 3 warmups, tokenization
-excluded — so these are **lower bounds**):
+batch 32, seq len 128 — the repo's own configured shape — tokenization excluded,
+so these are **lower bounds**):
 
-| backend | ms / batch of 32 | ms / msg | msg/s, one worker |
+| backend | ms / batch of 32 | msg/s, one worker | vs mock |
 |---|---|---|---|
-| `MockInferencePipeline` | 25.0 | 0.78 | 1280 |
-| **RTX 4060 Laptop GPU** | **104.0** | **3.25** | **308** |
-| **CPU** | **2517.9** | **78.69** | **12.7** |
+| `MockInferencePipeline` | 25.0 | 1280 | — |
+| **RTX 4060 Laptop GPU** | **104 – 115** | **277 – 308** | **4.2 – 4.6×** |
+| **CPU** | **2518 – 3473** | **9.2 – 12.7** | **101 – 139×** |
 
-So the simulation is optimistic by **4.2× on GPU and 101× on CPU**. Note also
-that the published 1500 msg/s saturation point exceeded even the mock's own
-single-worker ceiling of 1280 msg/s — the figure was not internally consistent.
-Reaching 1500 msg/s with real inference would need roughly five concurrent GPU
-workers.
+**Ranges, not point estimates.** An earlier version of this table gave `104.0`
+and `2517.9` and called them stable to ~1.5%, on two runs minutes apart. An
+independent re-run in a later session came back 9% higher. This is a laptop GPU
+with unlocked clocks, so a same-session repeat measures repeatability, not
+reproducibility. The ratio is the durable finding; the millisecond figure is not.
+
+On the previously published 1500 msg/s: that is the **first target rate at which
+the consumer fell behind**, not an achieved throughput — the achieved rate at
+that level is ~1250 msg/s, below the mock's 1280 ceiling, so the old numbers were
+internally consistent. (An earlier version of this section said otherwise; that
+was wrong.) The real defect is that `saturation_point_msgs_per_sec` reads like an
+achievable rate and this README quoted it as one.
 
 Reproduce the real measurement: `python scripts/measure_real_inference.py`.
 Every benchmark report is now stamped `inference_backend` and carries a
@@ -321,7 +333,7 @@ NLP-Pipeline-at-Scale/
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 7 tests across 3 files
+pytest          # 38 tests across 6 files
 ruff check .
 ```
 

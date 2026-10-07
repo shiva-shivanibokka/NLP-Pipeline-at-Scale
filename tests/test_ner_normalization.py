@@ -37,10 +37,14 @@ from src.ner.pipeline import _normalize_entity
         "FBI",  # contains "fb" -> was brand:meta
         "Al",  # inside "alphabet" -> was brand:google
         "AWSome",  # contains "aws" -> was brand:amazon
-        "Egypt",  # contains "gpt" -> was brand:openai
+        "Gptool",  # contains "gpt" -> was brand:openai
         "GP",  # inside "gpt"
         "A",  # inside almost everything
-        "Metabolism",  # contains "meta"
+        "Metabolism",  # contains "meta" -> was brand:meta
+        "Metallica",  # contains "meta" -> was brand:meta
+        "Googleplex",  # contains "google" -> was brand:google
+        "Amazonia",  # contains "amazon" -> was brand:amazon
+        "Twitterature",  # contains "twitter" -> was brand:twitter
         "Applebee's",  # contains "apple"
     ],
 )
@@ -54,6 +58,27 @@ def test_fbi_is_not_meta():
     """Named separately because it is the clearest demonstration of the bug."""
     assert _normalize_entity("FBI", "ORG") != "brand:meta"
     assert _normalize_entity("FBI", "ORG") is None
+
+
+@pytest.mark.parametrize(
+    "surface, expected",
+    [
+        ("GOOG", "brand:google"),  # Alphabet class-C ticker
+        ("Insta", "brand:meta"),
+        ("Elon", "brand:twitter"),
+    ],
+)
+def test_real_mentions_that_the_fix_initially_broke_still_resolve(surface, expected):
+    """Removing the fragment direction was right, but it cost real recall.
+
+    These three resolved under the old substring rule and stopped resolving
+    under word-boundary matching — an adversarial review caught it. The fix is
+    to list them as table entries, not to restore a rule that also mapped "FBI"
+    to Meta. Precision and recall have to hold at the same time, which is what
+    this test and `test_unrelated_names_are_not_mapped_to_a_brand` assert
+    together.
+    """
+    assert _normalize_entity(surface, "ORG") == expected
 
 
 # ---------------------------------------------------------------------------

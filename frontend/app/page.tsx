@@ -191,11 +191,17 @@ export default function Home() {
         <p className="cold-note">
           {/* Describing a cold start implies there is something to warm up. When
               the probe says the backend is gone, say that instead. */}
-          {health === "down"
-            ? `The model backend is not reachable${healthReason ? ` (${healthReason})` : ""}, so Analyze will return an error. The measured results in the README stand on their own; this live demo does not.`
-            : loading
-              ? "Waking the model if it was idle — the first request can take ~20s."
-              : "Free scale-to-zero backend: the first request after idle wakes the model (~20s), then it's fast."}
+          {health === "checking"
+            ? // This page is statically prerendered, so the "checking" branch is
+              // the string that ships in the HTML on the wire — and the one a
+              // reader sees with JS disabled. It must not assert a backend that
+              // may not exist. The badge already fails safe; this did not.
+              "Checking whether the model backend is reachable…"
+            : health === "down"
+              ? `The model backend is not reachable${healthReason ? ` (${healthReason})` : ""}, so Analyze will return an error. The measured results in the README stand on their own; this live demo does not.`
+              : loading
+                ? "Waking the model if it was idle — the first request can take ~20s."
+                : "Free scale-to-zero backend: the first request after idle wakes the model (~20s), then it's fast."}
         </p>
       </section>
 

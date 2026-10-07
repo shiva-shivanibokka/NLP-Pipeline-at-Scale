@@ -103,12 +103,19 @@ BRAND_NORMALIZATION = {
     "google": "brand:google",
     "alphabet": "brand:google",
     "googl": "brand:google",
+    "goog": "brand:google",  # Alphabet class-C ticker; was reached only
+                             # via the removed substring fallback
+
     "$googl": "brand:google",
     "google llc": "brand:google",
     # Meta
     "meta": "brand:meta",
     "facebook": "brand:meta",
     "instagram": "brand:meta",
+    # "insta" as its own key: it used to resolve via the substring fallback,
+    # which was removed because it also mapped "FBI" to Meta. Real, common
+    # mentions like this need to be listed rather than guessed at.
+    "insta": "brand:meta",
     "fb": "brand:meta",
     "$meta": "brand:meta",
     # Amazon
@@ -129,6 +136,8 @@ BRAND_NORMALIZATION = {
     "twitter": "brand:twitter",
     "x corp": "brand:twitter",
     "elon musk": "brand:twitter",
+    "elon": "brand:twitter",  # ditto -- a very common bare mention
+
     # OpenAI
     "openai": "brand:openai",
     "chatgpt": "brand:openai",

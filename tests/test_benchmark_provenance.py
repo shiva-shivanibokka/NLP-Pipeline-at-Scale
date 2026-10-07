@@ -15,6 +15,7 @@ These tests make the provenance structural rather than documentary.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -35,7 +36,15 @@ def test_a_mock_backed_report_is_stamped_as_simulated():
 
 def test_the_warning_names_the_mechanism_and_the_real_cost():
     """A vague caveat is not enough -- the reader needs the mechanism and the
-    magnitude, or they cannot tell how wrong the number is."""
+    magnitude, or they cannot tell how wrong the number is.
+
+    This deliberately does NOT pin exact figures. An earlier version asserted the
+    literals "104.0" and "2517.9", which meant the suite *enforced* a number that
+    did not reproduce across sessions (the same measurement later came back 9%
+    higher on an unlocked laptop GPU) -- an honest re-measurement would have
+    broken the tests. What must hold is that the warning gives a *range* and the
+    ratio, not that it gives one particular millisecond value.
+    """
     warning = BenchmarkReport(
         inference_backend=MockInferencePipeline.BACKEND_ID
     ).provenance_warning
@@ -43,8 +52,23 @@ def test_the_warning_names_the_mechanism_and_the_real_cost():
     low = warning.lower()
     assert "time.sleep" in low, "must name the mechanism"
     assert "not" in low and "model" in low, "must say no model ran"
-    for figure in ("104.0", "2517.9", "308", "12.7"):
-        assert figure in warning, f"the real measured cost {figure} must appear"
+    # A range, not a point estimate: at least one "a-b" pair of numbers.
+    assert re.search(r"\d+(?:\.\d+)?-\d+(?:\.\d+)?", warning), (
+        "the real cost must be given as a range; a single figure from an "
+        "unlocked laptop GPU is not reproducible and must not be presented as if "
+        "it were"
+    )
+    assert "ms/batch" in low, "must say what the figure measures"
+    assert re.search(r"\d+(?:\.\d+)?x", low), "must give the ratio vs the mock"
+
+
+def test_the_warning_does_not_claim_a_precision_it_does_not_have():
+    """Guard the specific overclaim that shipped: 'stable to about 1.5%'."""
+    warning = BenchmarkReport(
+        inference_backend=MockInferencePipeline.BACKEND_ID
+    ).provenance_warning
+    assert "1.5%" not in warning
+    assert "stable to" not in warning.lower()
 
 
 def test_a_real_backend_is_not_stamped_as_simulated():

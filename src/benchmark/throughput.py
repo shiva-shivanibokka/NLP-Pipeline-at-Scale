@@ -75,9 +75,12 @@ class BenchmarkReport:
             "SIMULATED: inference was time.sleep(), not a model. These "
             "throughput and latency figures measure the batching loop only and "
             "must not be cited as pipeline performance. Measured real cost for "
-            "the same batch shape: 104.0 ms/batch of 32 on an RTX 4060 Laptop "
-            "GPU (308 msg/s per worker) and 2517.9 ms on CPU (12.7 msg/s), so "
-            "this run is optimistic by ~4.2x and ~101x respectively. "
+            "the same batch shape, over repeated runs: 104-115 ms/batch of 32 "
+            "on an RTX 4060 Laptop GPU (277-308 msg/s per worker) and "
+            "2518-3473 ms on CPU (9.2-12.7 msg/s), so this run is optimistic "
+            "by roughly 4.2-4.6x and 101-139x respectively. Ranges rather than "
+            "point estimates: the absolute figure moves ~10% across sessions on "
+            "an unlocked laptop GPU. "
             "Reproduce: python scripts/measure_real_inference.py"
         )
 
@@ -170,18 +173,25 @@ class MockInferencePipeline:
 
     **The default 25 ms/batch is not realistic and must not be presented as
     such.** Measured on 2026-10-07 with the actual ``MultiTaskRoBERTa``
-    (roberta-base backbone, batch 32, seq len 128, median of 15 iterations after
-    3 warmups, excluding tokenization):
+    (roberta-base backbone, batch 32, seq len 128 -- the repo's own configured
+    shape -- excluding tokenization):
 
-    | backend | ms/batch of 32 | ms/msg | msg/s, 1 worker |
+    | backend | ms/batch of 32 | msg/s, 1 worker | vs this mock |
     |---|---|---|---|
-    | this mock | 25.0 | 0.78 | 1280 |
-    | RTX 4060 Laptop GPU | **104.0** | 3.25 | **308** |
-    | CPU | **2517.9** | 78.69 | **12.7** |
+    | this mock | 25.0 | 1280 | -- |
+    | RTX 4060 Laptop GPU | **104-115** | **277-308** | **4.2-4.6x** |
+    | CPU | **2518-3473** | **9.2-12.7** | **101-139x** |
 
-    So the mock is optimistic by **4.2x on GPU and 101x on CPU**, and those
-    factors are lower bounds because tokenization is excluded. Reproduce with
-    ``scripts/measure_real_inference.py``.
+    Ranges, not point estimates, and deliberately so: an earlier version of this
+    docstring said "104.0 ms ... stable to about 1.5%", which was two runs taken
+    minutes apart. An independent re-run in a later session came back 9% higher.
+    This is a laptop GPU with unlocked clocks, so same-session repeats measure
+    repeatability, not reproducibility. The ratio is the durable finding; the
+    absolute figure is not.
+
+    Both ranges are lower bounds, because tokenization is excluded. Reproduce
+    with ``scripts/measure_real_inference.py``, which writes
+    ``results/benchmark/real_inference.json``.
 
     Every report produced with this backend is stamped
     ``inference_backend: "mock-time-sleep"`` and carries a ``warning`` field, so

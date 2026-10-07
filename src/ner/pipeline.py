@@ -150,8 +150,8 @@ def _normalize_entity(surface: str, entity_type: str) -> Optional[str]:
         if brand_key in key or key in brand_key:
 
     which mapped **"FBI" -> brand:meta** (the table has ``fb``), **"Al" ->
-    brand:google** (``al`` is inside ``alphabet``), "Egypt" -> brand:openai
-    (``gpt``), and "AWSome" -> brand:amazon. Dict iteration order decided which
+    brand:google** (``al`` is inside ``alphabet``), "AWSome" -> brand:amazon
+    (``aws``), and "Applebee's" -> brand:apple. Dict iteration order decided which
     wrong answer you got. Aggregating sentiment by ``canonical_id`` then
     attributed FBI mentions to Meta -- invisible in aggregate, indefensible per
     row. ``tests/test_ner_normalization.py`` pins these cases.
@@ -176,9 +176,13 @@ def _normalize_entity(surface: str, entity_type: str) -> Optional[str]:
     if key in BRAND_NORMALIZATION:
         return BRAND_NORMALIZATION[key]
 
-    # Whole-word match of a table entry inside the surface form. Longest key
-    # first, so "google cloud" wins over "google" and the result does not depend
-    # on dict ordering.
+    # Whole-word match of a table entry inside the surface form, longest key
+    # first so a multi-word entry like "google llc" wins over the bare "google"
+    # it contains. Note `sorted` is stable, so among keys of EQUAL length the
+    # dict's insertion order still decides -- there are six 4-character keys
+    # (aapl, meta, amzn, msft, tsla, gpt4), so ordering dependence is reduced,
+    # not eliminated. A surface containing two different brands at the same key
+    # length resolves to whichever appears first in the table.
     for brand_key in sorted(BRAND_NORMALIZATION, key=len, reverse=True):
         if re.search(rf"(?<!\w){re.escape(brand_key)}(?!\w)", key):
             return BRAND_NORMALIZATION[brand_key]

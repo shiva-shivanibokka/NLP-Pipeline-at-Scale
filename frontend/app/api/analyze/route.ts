@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: timedOut
-          ? "The model was asleep and is waking up (free scale-to-zero backend). Give it ~20s and click Analyze again — it stays fast once warm."
+          // Do NOT promise a warm-up here. A timeout is equally consistent with
+          // a cold start and with a backend that no longer exists — and on this
+          // deployment it is the latter. Telling the user to wait 20s and retry
+          // sends them round a loop that cannot terminate. The header badge
+          // (via /api/health) reports which case this is.
+          ? "No response from the model backend within 60s. If it is merely cold, a retry can succeed; if the backend is gone, it will not. The badge at the top of the page reports which."
           : `Model API unreachable: ${e instanceof Error ? e.message : String(e)}`,
       },
       { status: timedOut ? 503 : 502 },

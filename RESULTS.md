@@ -41,28 +41,65 @@ msg/s … per-message inference p99 ≈ 1.0 ms" read as a property of the pipeli
 The arithmetic gives it away: 25 ms ÷ 32 = **0.78 ms/msg**, and the published p50
 was 0.79–0.83 ms. The number was the sleep divided by the batch size.
 
-**It was not even internally consistent.** The claimed saturation point of 1500
-msg/s exceeds the mock's own single-worker ceiling of 1280 msg/s.
+**A related presentation defect, stated correctly.** An earlier draft of this
+section accused the published 1500 msg/s of being "not internally consistent"
+because it exceeds the mock's 1280 msg/s single-worker ceiling. **That accusation
+was wrong**, and an adversarial review caught it.
+`saturation_point_msgs_per_sec` is not an achieved throughput: `run_benchmark()`
+sets it to the `target_msgs_per_sec` of the *first level at which the consumer
+fell behind*. With levels `[100, 250, 500, 1000, 1500, 2000]`, the first failing
+level is necessarily above the ceiling -- reporting 1500 is what a *correct*
+saturation sweep does. The achieved rate in the committed data confirms it:
+`actual_consumer_msgs_per_sec` at the 1500 level is **1234.3** (1250.1 in the
+original file), both below 1280.
+
+The real defect is the **field name**: `saturation_point_msgs_per_sec` reads like
+an achievable rate, and the README quoted it as one. The number a reader wants is
+`actual_consumer_msgs_per_sec` (~1250 under the mock). Accusing the old numbers
+of inconsistency, in a document whose thesis is that unsupported claims are the
+defect, was precisely the error being documented.
 
 ### Real measurement
 
 Same batch shape through the actual `MultiTaskRoBERTa` (roberta-base backbone,
 batch 32, seq len 128, median of 15 iterations after 3 warmups):
 
-| backend | ms / batch of 32 | ms / msg | msg/s, one worker | vs mock |
-|---|---|---|---|---|
-| `MockInferencePipeline` | 25.0 | 0.78 | 1280 | — |
-| **RTX 4060 Laptop GPU** | **104.0** | **3.25** | **308** | **4.2× optimistic** |
-| **CPU** | **2517.9** | **78.69** | **12.7** | **101× optimistic** |
+| backend | ms / batch of 32 | msg/s, one worker | vs mock |
+|---|---|---|---|
+| `MockInferencePipeline` | 25.0 | 1280 | — |
+| **RTX 4060 Laptop GPU** | **104 – 115** | **277 – 308** | **4.2 – 4.6×** |
+| **CPU** | **2518 – 3473** | **9.2 – 12.7** | **101 – 139×** |
 
-Reproduced on a second run at 105.6 ms and 2524.0 ms, so the figures are stable
-to about 1.5%.
+**Ranges, not point estimates, and the reason matters.** An earlier draft reported
+`104.0` and `2517.9` and called them "stable to about 1.5%", on the strength of
+two runs taken minutes apart. An independent re-run in a later session came back
+**9% higher**. This is a laptop GPU with unlocked clocks and dynamic boost, so a
+same-session repeat measures *repeatability* and says nothing about
+*reproducibility* — presenting it as the latter was the same error this document
+exists to catalogue, committed while cataloguing it.
+
+Worse, those literals were hardcoded into library code **and pinned by a test**,
+so the suite enforced a number that did not reproduce, and an honest
+re-measurement would have failed CI. The figures now live in
+`results/benchmark/real_inference.json`, the warning string carries the range, and
+the test asserts a *range and a ratio* rather than a value.
+
+Observed across 7 runs (5 mine, 2 by an independent reviewer on this machine):
+GPU 104.0 / 105.6 / 108.6 / 109.3 / 112.9 / 113.7 / 113.7 ms; CPU 2517.9 / 2524.0
+/ 2578.9 / 2761.7 / 2766.9 / 2788.9 / 2829.6 ms. **The ratio is the durable
+finding; the absolute millisecond figure is not.**
 
 **These are lower bounds.** Tokenization is excluded (the batch is encoded once
 outside the timing loop), and the heads are randomly initialised — which does not
 affect timing, since cost is set by architecture rather than weight values, but
-is stated so the measurement is not over-read. Reaching 1500 msg/s with real
-inference would need roughly five concurrent GPU workers.
+is stated so the measurement is not over-read.
+
+`1500 / 300 ≈ 5` is arithmetic, not a capacity estimate, so this file does not
+claim "five workers would reach 1500 msg/s". At batch 32 / seq 128 one 4060 is
+already compute-bound; five concurrent workers on the *same* GPU would contend
+for the same SMs and scale sublinearly, and five separate GPUs is a different
+proposition entirely. What the measurement supports is a per-worker ceiling, and
+nothing about how it aggregates.
 
 Reproduce: `python scripts/measure_real_inference.py`.
 
@@ -104,7 +141,8 @@ The table has 34 entries, three of them very short: `fb` → Meta, `aws` → Ama
 |---|---|---|
 | **FBI** | `brand:meta` | `"fb"` is inside `"fbi"` |
 | **Al** | `brand:google` | `"al"` is inside `"alphabet"` |
-| Egypt | `brand:openai` | `"gpt"` inside `"egypt"` |
+| Googleplex | `brand:google` | `"google"` inside |
+| Metallica | `brand:meta` | `"meta"` inside |
 | AWSome | `brand:amazon` | `"aws"` inside |
 | Applebee's | `brand:apple` | `"apple"` inside |
 
@@ -115,8 +153,20 @@ Meta — invisible in aggregate, indefensible when anyone checks a single row.
 **Fix.** The `key in brand_key` direction is gone entirely: a surface form being a
 *fragment* of a brand name is not evidence it refers to that brand. The remaining
 direction requires word boundaries (`(?<!\w)…(?!\w)`), and candidate keys are
-tried longest-first so the result no longer depends on dict ordering. "apple inc"
-still resolves to Apple; "Applebee's" does not.
+tried longest-first. "apple inc" still resolves to Apple; "Applebee's" does not.
+
+Ordering dependence is **reduced, not eliminated**: `sorted` is stable, so among
+equal-length keys (there are six of 4 characters) the dict's insertion order
+still decides. Low practical impact — spans are usually a single entity — but
+"no longer depends on dict ordering", as an earlier draft put it, was an absolute
+claim that is not true.
+
+**Three genuine recall losses**, found by the same review and fixed by listing
+them rather than by restoring the fallback: `GOOG` (Alphabet's class-C ticker),
+`Insta` and `Elon` all resolved under the old substring rule and stopped
+resolving under word-boundary matching. They are now explicit table entries, so
+precision and recall both hold: `GOOG`/`Insta`/`Elon` resolve, while
+`FBI`/`Al`/`Applebee's`/`Googleplex` do not.
 
 `tests/test_ner_normalization.py` (17 tests) pins the false positives and
 verifies every existing table entry still resolves, including with `$`/`#`/`@`
@@ -168,9 +218,13 @@ The underlying curves also do not support the implied tie:
 | 650 | 0.6323 | 0.6105 | **+0.0218** |
 | 700 | 0.6309 | 0.6237 | **+0.0072** |
 
-Uncertainty sampling is **behind at 8 of 11 checkpoints** and ahead at 2 (the
-first two tie, before either has queried anything). The final +0.0072 is the last
-point of a noisy single-seed curve.
+Uncertainty sampling is **behind at 7 of the 11 checkpoints**, ahead at 2, and
+tied at 2 (the first two, before either has queried anything). The final +0.0072
+is the last point of a noisy single-seed curve.
+
+(An earlier draft said "behind at 8 of 11 ... and ahead at 2 (the first two
+tie)", which totals 12 of 11 and is impossible on its face. The correct count is
+7 / 2 / 2. Flagged by adversarial review.)
 
 **Changed to:** the curves are close and uncertainty sampling does not lead;
 "no benefit at this scale" is a reasonable reading, a tested equivalence is not.
@@ -191,9 +245,25 @@ The claim was "within ~1 F1 point on every task". The actual worst case is
 **1.78 points**, on toxicity, in the configuration that ships.
 
 The more interesting correction is that "accuracy is a wash" hid the *shape* of
-the trade: emotion **improves** under sharing while toxicity pays the entire
-cost. Sharing helps the task with the most data and hurts the one with the least.
-That is a better story than a wash, and it is true.
+the trade: emotion **improves** under sharing while toxicity pays the largest
+cost.
+
+**A tidy explanation for that shape was proposed, and it is false.** An earlier
+draft said "sharing helps the task with the most data and hurts the one with the
+least" -- and explicitly certified it as true. The training splits say otherwise:
+
+| task | train rows | dF1 (shipped config) |
+|---|---|---|
+| sentiment (`tweet_eval/sentiment`) | **45,615** -- most | **-0.93** |
+| emotion (`dair-ai/emotion`) | 16,000 -- middle | **+0.92** |
+| toxicity (`tweet_eval/hate`) | **9,000** -- least | **-1.78** |
+
+The task with the **most** data is hurt; the task that improves is the **middle**
+one. The accurate statement is that sharing hurts both the largest and the
+smallest task and helps the middle one -- which has no tidy data-size story. The
+sentence was a post-hoc narrative fitted to three numbers, and it was the single
+most rhetorically load-bearing claim in this section. Caught by adversarial
+review; see §9.
 
 The efficiency numbers were understated if anything and are now exact: **3.0×
 fewer parameters** (373 M → 125 M) and **2.2× lower p99 latency** (27.0 → 12.4

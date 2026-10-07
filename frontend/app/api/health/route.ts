@@ -30,6 +30,18 @@ export async function GET() {
     if (!r.ok) {
       return NextResponse.json({ up: false, reason: `backend returned ${r.status}` });
     }
+    // 2xx is not sufficient. The backend's /health also reports model_trained,
+    // and an untrained backbone returns well-formed, meaningless probabilities
+    // — a green "reachable" badge over that is the same false assurance in a
+    // different place. Only a literal `false` counts against it; an older
+    // backend that omits the field reports undefined and is not punished.
+    const body = (await r.json().catch(() => ({}))) as { model_trained?: boolean };
+    if (body.model_trained === false) {
+      return NextResponse.json({
+        up: false,
+        reason: "backend is serving an untrained model (predictions are meaningless)",
+      });
+    }
     return NextResponse.json({ up: true });
   } catch (e) {
     const reason = e instanceof Error && e.name === "AbortError"
