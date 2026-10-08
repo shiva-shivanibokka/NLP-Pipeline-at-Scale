@@ -17,21 +17,53 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Skip on forks / when the deploy secret isn't configured.
+    # Skips forks. It does NOT skip a missing deploy secret, despite what the
+    # comment here used to say -- `secrets` is not an available context in a
+    # job-level `if`, so that condition cannot be written at this level. The
+    # gate step below is where the secret is actually checked.
     if: ${{ github.repository_owner == 'shiva-shivanibokka' }}
     steps:
+      # Added 8 October 2026. The Google Cloud billing account behind this
+      # service is closed and GCP_SA_KEY is not set, so every push touching
+      # api/**, src/**, configs/**, the Dockerfile or requirements-api.txt
+      # failed here:
+      #
+      #   google-github-actions/auth failed with: the GitHub Action workflow
+      #   must specify exactly one of "workload_identity_provider" or
+      #   "credentials_json"!
+      #
+      # That is an unconfigured deploy reported as a broken build, on a repo
+      # whose own CI is green. The secret is read into the environment rather
+      # than interpolated into the script, so it is never expanded into a
+      # command line.
+      - name: Is the deploy secret configured?
+        id: gate
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::GCP_SA_KEY is not configured, so there is nothing to deploy to. This is a skip, not a success: the Cloud Run service for this project is down with its billing account. See the README."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.configured == 'true'
 
       - id: auth
+        if: steps.gate.outputs.configured == 'true'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - uses: google-github-actions/setup-gcloud@v2
+        if: steps.gate.outputs.configured == 'true'
         with:
           project_id: ${{ secrets.GCP_PROJECT }}
 
       - name: Deploy to Cloud Run
+        if: steps.gate.outputs.configured == 'true'
         run: |
           gcloud run deploy nlp-pipeline-api \
             --source . \
