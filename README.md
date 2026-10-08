@@ -333,11 +333,15 @@ NLP-Pipeline-at-Scale/
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 38 tests across 6 files
+pytest          # 46 tests across 6 files
 ruff check .
 ```
 
-Coverage is focused, not exhaustive — the tests pin the parts most likely to break silently: the multi-task **loss-masking contract** (each head only trains on examples that carry its label), the **SPC** alert math, and the **active-learning** acquisition function. GitHub Actions runs `ruff` + `pytest` on every push and PR (`.github/workflows/ci.yml`).
+Coverage is focused, not exhaustive — the tests pin the parts most likely to break silently: the multi-task **loss-masking contract** (each head only trains on examples that carry its label), the **SPC** alert math, the **active-learning** acquisition function, **benchmark provenance** (§1 — that a throughput number cannot be published without a marker saying what produced it), **brand normalisation** (§2), and the **API disclosure contract** (§6). GitHub Actions runs `ruff` + `pytest` on every push and PR (`.github/workflows/ci.yml`).
+
+The count above is what CI reports, not a figure typed once and left: `46 passed`
+on the most recent run of `main`. It was `38` until the evaluation in
+[`RESULTS.md`](RESULTS.md) added the last three files.
 
 ---
 
