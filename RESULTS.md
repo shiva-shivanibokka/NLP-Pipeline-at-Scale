@@ -306,6 +306,53 @@ the repo root on `sys.path`.
 
 ---
 
+## 7b. The CI job that could not run the test added in section 6
+
+Found on 2026-10-08, when the pull request opened and CI ran this branch for the
+first time on a clean machine.
+
+`tests/test_api_honesty.py` -- the test added in section 6, which pins the two
+states the API must disclose -- imports `api.main`. That module's top-level
+imports are `torch`, `dotenv`, `fastapi` and `pydantic`; everything else in the
+file is imported inside a function. `requirements-dev.txt`, which is the only
+thing the CI job installs, declared `torch` and not the other three.
+
+The result was not a failing test. It was a **collection error**, so pytest
+aborted before running anything:
+
+```
+ImportError while importing test module '.../tests/test_api_honesty.py'
+E   ModuleNotFoundError: No module named 'dotenv'
+!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!
+1 error in 5.85s
+```
+
+Zero of the 46 tests ran. Locally all 46 passed, because this machine has the
+full `requirements.txt` environment where `fastapi` and `python-dotenv` are
+present -- they are declared in `requirements.txt` and `requirements-api.txt`,
+just not in the dev file CI uses.
+
+Fixed by adding `fastapi>=0.110.0` and `python-dotenv>=1.0.0` to
+`requirements-dev.txt`, with a comment saying why they are there so a future
+trim does not remove them again. `pydantic` arrives as a `fastapi` dependency
+and is not pinned separately.
+
+Reproduced before fixing, in a venv built exactly as CI builds one (CPU torch,
+then `requirements-dev.txt`):
+
+| `requirements-dev.txt` | result |
+| --- | --- |
+| as committed | **collection error, 0 of 46 tests ran** |
+| plus fastapi + python-dotenv | **46 passed**, `ruff check .` clean |
+
+**Worth being exact about what was wrong.** The test itself was correct and its
+assertions hold. But between the commit that added it and this one, the suite
+that was supposed to enforce the section-6 contract was not merely failing to
+enforce it -- it was not running at all, and the job failed in a way that looked
+like a dependency problem rather than like an unchecked contract. The local run
+was green throughout. This is the same shape as section 1: the number was
+coming from somewhere other than the thing it claimed to measure.
+
 ## 8. What is NOT claimed
 
 - **No retraining or re-running of the ablation.** The ablation and active
