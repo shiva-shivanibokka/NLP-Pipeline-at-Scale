@@ -16,6 +16,7 @@ Why a separate NER module (not a 4th head on the multi-task model):
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from transformers import pipeline as hf_pipeline
@@ -141,7 +142,24 @@ def _normalize_entity(surface: str, entity_type: str) -> Optional[str]:
     Normalisation steps:
     1. Lowercase and strip leading $, #, @
     2. Look up in the BRAND_NORMALIZATION table
-    3. Return canonical ID or None if not a known brand
+    3. Fall back to a WHOLE-WORD match of a table entry inside the surface form
+    4. Return canonical ID or None if not a known brand
+
+    Step 3 used to be a bare substring test in both directions::
+
+        if brand_key in key or key in brand_key:
+
+    which mapped **"FBI" -> brand:meta** (the table has ``fb``), **"Al" ->
+    brand:google** (``al`` is inside ``alphabet``), "AWSome" -> brand:amazon
+    (``aws``), and "Applebee's" -> brand:apple. Dict iteration order decided which
+    wrong answer you got. Aggregating sentiment by ``canonical_id`` then
+    attributed FBI mentions to Meta -- invisible in aggregate, indefensible per
+    row. ``tests/test_ner_normalization.py`` pins these cases.
+
+    The ``key in brand_key`` direction is gone entirely: a surface form being a
+    fragment of a brand name is not evidence it refers to that brand. The
+    remaining direction requires word boundaries, so "apple inc" still resolves
+    to Apple while "Applebee's" does not.
     """
     if not surface:
         return None
@@ -151,14 +169,22 @@ def _normalize_entity(surface: str, entity_type: str) -> Optional[str]:
         return None
 
     key = surface.lower().strip().lstrip("$#@").strip()
+    if not key:
+        return None
 
     # Direct lookup
     if key in BRAND_NORMALIZATION:
         return BRAND_NORMALIZATION[key]
 
-    # Partial match: check if any known brand name is a substring
-    for brand_key, brand_id in BRAND_NORMALIZATION.items():
-        if brand_key in key or key in brand_key:
-            return brand_id
+    # Whole-word match of a table entry inside the surface form, longest key
+    # first so a multi-word entry like "google llc" wins over the bare "google"
+    # it contains. Note `sorted` is stable, so among keys of EQUAL length the
+    # dict's insertion order still decides -- there are six 4-character keys
+    # (aapl, meta, amzn, msft, tsla, gpt4), so ordering dependence is reduced,
+    # not eliminated. A surface containing two different brands at the same key
+    # length resolves to whichever appears first in the table.
+    for brand_key in sorted(BRAND_NORMALIZATION, key=len, reverse=True):
+        if re.search(rf"(?<!\w){re.escape(brand_key)}(?!\w)", key):
+            return BRAND_NORMALIZATION[brand_key]
 
     return None

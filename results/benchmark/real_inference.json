@@ -1,0 +1,56 @@
+{
+  "note": "Independent repetitions in ONE process. Across separate sessions this laptop GPU has shown a further ~10% spread (104-114 ms observed for the same batch shape), so treat the range as indicative and never quote a single figure as reproducible.",
+  "mock_ms_per_batch": 25.0,
+  "measurements": [
+    {
+      "device": "cuda",
+      "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+      "batch_size": 32,
+      "max_seq_len": 128,
+      "reps": 5,
+      "iters_per_rep": 15,
+      "per_batch_ms_median": 106.1,
+      "per_batch_ms_min": 104.0,
+      "per_batch_ms_max": 115.4,
+      "per_batch_ms_all_reps": [
+        115.4,
+        110.8,
+        106.1,
+        105.0,
+        104.0
+      ],
+      "per_message_ms_median": 3.32,
+      "msgs_per_sec_one_worker_median": 301.6,
+      "msgs_per_sec_one_worker_min": 277.2,
+      "msgs_per_sec_one_worker_max": 307.7,
+      "ratio_vs_mock_median": 4.2,
+      "ratio_vs_mock_min": 4.2,
+      "ratio_vs_mock_max": 4.6
+    },
+    {
+      "device": "cpu",
+      "device_name": "CPU",
+      "batch_size": 32,
+      "max_seq_len": 128,
+      "reps": 5,
+      "iters_per_rep": 15,
+      "per_batch_ms_median": 2777.5,
+      "per_batch_ms_min": 2618.4,
+      "per_batch_ms_max": 3472.7,
+      "per_batch_ms_all_reps": [
+        2757.8,
+        2777.5,
+        2618.4,
+        3066.8,
+        3472.7
+      ],
+      "per_message_ms_median": 86.8,
+      "msgs_per_sec_one_worker_median": 11.5,
+      "msgs_per_sec_one_worker_min": 9.2,
+      "msgs_per_sec_one_worker_max": 12.2,
+      "ratio_vs_mock_median": 111.1,
+      "ratio_vs_mock_min": 104.7,
+      "ratio_vs_mock_max": 138.9
+    }
+  ]
+}
