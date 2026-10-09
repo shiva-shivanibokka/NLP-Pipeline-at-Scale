@@ -20,7 +20,11 @@ bug mapped **"FBI" to Meta**.
 | 7 | `include_topics=True` 500s in the deployed image | **Fixed** (§6) |
 | 8 | Test suite imported `transformers` without the backend shim | **Fixed** (§7) |
 
-Tests: **7 → 38 passed.** The frontend typechecks and builds clean.
+Tests: **0 → 46 passed** — `pytest` in a venv built as CI builds one (CPU torch,
+then `requirements-dev.txt`). Before the fix the suite hit a collection error, so
+**zero** of the 46 ran; after it, all 46 pass and `ruff check .` is clean (§7b).
+The green CI run on `563d81b` prints `46 passed in 19.54s`. The frontend
+typechecks and builds clean.
 
 ---
 
